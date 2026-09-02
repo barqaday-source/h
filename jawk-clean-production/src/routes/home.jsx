@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { MapPin, Plus, Search, Zap, X, User, Share2, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import LiveMap from "@/components/LiveMap";
 import {
@@ -49,8 +49,10 @@ function HomeScreen() {
   const [activeFilter, setActiveFilter] = useState("nearby");
   const [storyUploading, setStoryUploading] = useState(false);
 
+  const [localStories, setLocalStories] = useState([]);
   const [activeStoryGroup, setActiveStoryGroup] = useState(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
+  const [storyProgress, setStoryProgress] = useState(0);
 
   const dataState = useRemoteData(() => fetchHomeData({ query }), [query]);
   const notificationsState = useRemoteData(fetchNotifications, []);
@@ -62,7 +64,13 @@ function HomeScreen() {
     getSession().then(({ session }) => setUserId(session?.user?.id ?? ""));
   }, []);
 
-  const validStories = (rawData.stories || []).filter((s) => {
+  useEffect(() => {
+    if (rawData.stories) {
+      setLocalStories(rawData.stories);
+    }
+  }, [rawData.stories]);
+
+  const validStories = (localStories || []).filter((s) => {
     if (!s.created_at) return true;
     const createdAt = new Date(s.created_at).getTime();
     const now = new Date().getTime();
@@ -89,17 +97,54 @@ function HomeScreen() {
     if (!activeStoryGroup) return;
     if (activeStoryIndex < activeStoryGroup.stories.length - 1) {
       setActiveStoryIndex((prev) => prev + 1);
+      setStoryProgress(0);
     } else {
+      // إغلاق العارض برقة واحترافية عند انتهاء كافة القصص
       setActiveStoryGroup(null);
       setActiveStoryIndex(0);
+      setStoryProgress(0);
     }
   };
 
   const handlePrevStory = () => {
     if (activeStoryIndex > 0) {
       setActiveStoryIndex((prev) => prev - 1);
+      setStoryProgress(0);
+    } else {
+      setStoryProgress(0);
     }
   };
+
+  // مؤقت الانستغرام التلقائي للصور (5 ثوانٍ)
+  useEffect(() => {
+    if (!activeStoryGroup) return;
+
+    const currentStory = activeStoryGroup.stories[activeStoryIndex];
+    const mediaUrl = currentStory?.media_url || currentStory?.image_url || currentStory?.url;
+    const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
+
+    setStoryProgress(0);
+
+    // للفيديوهات يتم الاعتماد على حدث الوقت الخاص بالفيديو
+    if (isVideo) return;
+
+    const DURATION = 5000; // 5 ثوانٍ للقصة المصورة
+    const INTERVAL = 50;
+    const step = (INTERVAL / DURATION) * 100;
+
+    const timer = setInterval(() => {
+      setStoryProgress((prev) => {
+        if (prev + step >= 100) {
+          clearInterval(timer);
+          handleNextStory();
+          return 100;
+        }
+        return prev + step;
+      });
+    }, INTERVAL);
+
+    return () => clearInterval(timer);
+  }, [activeStoryGroup, activeStoryIndex]);
 
   const handleShareStory = async (story) => {
     const url = window.location.href;
@@ -117,16 +162,22 @@ function HomeScreen() {
     }
   };
 
-  const handleDeleteCurrentStory = async (storyId) => {
+  const handleDeleteCurrentStory = async (story) => {
+    const targetId = story?.id;
+
+    // تحديث فوري للشاشة بإزالة القصة مباشرة
+    setLocalStories((prev) => prev.filter((s) => (targetId ? s.id !== targetId : s.user_id !== userId)));
+    setActiveStoryGroup(null);
+    setActiveStoryIndex(0);
+
     try {
-      await deleteStory(storyId);
+      await deleteStory(targetId);
       toast.success("تم حذف القصة بنجاح");
-      setActiveStoryGroup(null);
-      setActiveStoryIndex(0);
       await dataState.reload();
     } catch (error) {
       console.error(error);
-      toast.error("تعذر حذف القصة من قاعدة البيانات");
+      toast.error("حدث خطأ أثناء الحذف من قاعدة البيانات");
+      await dataState.reload();
     }
   };
 
@@ -200,7 +251,7 @@ function HomeScreen() {
           <span className="text-[11px] font-medium text-foreground">قصتك</span>
         </div>
 
-        {/* قصص الربع والأصدقاء */}
+        {/* قصص باقي اللاعبين */}
         {otherStoryGroups.map((group) => {
           const firstStory = group.stories[0];
           const mediaUrl = firstStory?.media_url || firstStory?.image_url || firstStory?.url;
@@ -235,24 +286,36 @@ function HomeScreen() {
         })}
       </div>
 
-      {/* عارض القصة للشاشة كاملة 100% */}
+      {/* عارض القصة الكامل بنمط انستغرام المتكامل */}
       {activeStoryGroup && (() => {
         const currentStory = activeStoryGroup.stories[activeStoryIndex];
         const mediaUrl = currentStory?.media_url || currentStory?.image_url || currentStory?.url;
         const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
         const timeAgo = getTimeAgo(currentStory?.created_at);
-        const isMyStory = currentStory?.user_id === userId || activeStoryGroup.userId === userId;
+
+        // التحقق الدقيق من كون القصة ملكاً للمستخدم الحالي لعرض زر الحذف
+        const isMyStory =
+          activeStoryGroup.userId === userId ||
+          currentStory?.user_id === userId ||
+          (myStoryGroup && activeStoryGroup.userId === myStoryGroup.userId);
 
         return (
-          <div className="fixed inset-0 z-[999] h-[100dvh] w-full bg-black select-none flex flex-col justify-between overflow-hidden">
+          <div className="fixed inset-0 z-[999] h-[100dvh] w-full bg-black select-none flex flex-col justify-between overflow-hidden animate-in fade-in duration-200">
+            {/* الشريط العلوي ومؤشر التقدم الزمني */}
             <div className="absolute top-0 inset-x-0 z-30 p-4 pt-6 bg-gradient-to-b from-black/90 via-black/50 to-transparent">
               <div className="flex gap-1.5 mb-3">
                 {activeStoryGroup.stories.map((s, idx) => (
                   <div key={s.id || idx} className="h-1 flex-1 rounded-full bg-white/30 overflow-hidden">
                     <div
-                      className={`h-full bg-white transition-all duration-300 ${
-                        idx === activeStoryIndex ? "w-full" : idx < activeStoryIndex ? "w-full opacity-80" : "w-0"
-                      }`}
+                      className="h-full bg-white transition-all duration-75 ease-linear"
+                      style={{
+                        width:
+                          idx === activeStoryIndex
+                            ? `${storyProgress}%`
+                            : idx < activeStoryIndex
+                            ? "100%"
+                            : "0%",
+                      }}
                     />
                   </div>
                 ))}
@@ -278,20 +341,21 @@ function HomeScreen() {
                       e.stopPropagation();
                       handleShareStory(currentStory);
                     }}
-                    className="p-2 rounded-full bg-black/40 text-white hover:bg-black/70 transition"
+                    className="p-2 rounded-full bg-black/40 text-white hover:bg-black/70 transition active:scale-90"
                     title="مشاركة"
                   >
                     <Share2 className="h-4 w-4" />
                   </button>
 
+                  {/* زر السلة/الحذف يظهر دائمًا في قصص المستخدم */}
                   {isMyStory && (
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDeleteCurrentStory(currentStory?.id);
+                        handleDeleteCurrentStory(currentStory);
                       }}
-                      className="p-2 rounded-full bg-rose-600/80 text-white hover:bg-rose-700 transition"
+                      className="p-2 rounded-full bg-rose-600/90 text-white hover:bg-rose-700 transition shadow-lg active:scale-90"
                       title="حذف القصة"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -305,7 +369,7 @@ function HomeScreen() {
                       setActiveStoryGroup(null);
                       setActiveStoryIndex(0);
                     }}
-                    className="p-2 rounded-full bg-black/40 text-white hover:bg-black/70 transition"
+                    className="p-2 rounded-full bg-black/40 text-white hover:bg-black/70 transition active:scale-90"
                     title="إغلاق"
                   >
                     <X className="h-5 w-5" />
@@ -314,18 +378,35 @@ function HomeScreen() {
               </div>
             </div>
 
+            {/* عرض الصورة أو الفيديو */}
             <div 
               className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden"
               onContextMenu={(e) => e.preventDefault()}
             >
               {isVideo ? (
-                <video src={mediaUrl} autoPlay className="w-full h-full object-cover" />
+                <video
+                  src={mediaUrl}
+                  autoPlay
+                  playsInline
+                  onTimeUpdate={(e) => {
+                    const p = (e.currentTarget.currentTime / e.currentTarget.duration) * 100;
+                    setStoryProgress(p || 0);
+                  }}
+                  onEnded={handleNextStory}
+                  className="w-full h-full object-cover"
+                />
               ) : mediaUrl ? (
-                <img src={mediaUrl} alt="قصة" className="w-full h-full object-cover select-none" />
+                <img
+                  src={mediaUrl}
+                  alt="قصة"
+                  onDragStart={(e) => e.preventDefault()}
+                  className="w-full h-full object-cover select-none"
+                />
               ) : (
                 <p className="text-sm text-slate-400">الوسائط غير متوفرة</p>
               )}
 
+              {/* مناطق اللمس الجانبية للتقديم والتأخير */}
               <div className="absolute inset-0 flex z-20">
                 <div className="w-[35%] h-full cursor-pointer" onClick={handlePrevStory} />
                 <div className="w-[65%] h-full cursor-pointer" onClick={handleNextStory} />
