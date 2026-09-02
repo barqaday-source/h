@@ -14,7 +14,7 @@ import {
 } from "@/components/ui-kit";
 import { RemoteState, useRemoteData } from "@/hooks/use-app-data";
 import {
-  fetchHomeData,
+  fetchHomeData, fetchProfile,
   fetchNotifications,
   joinMatch,
   uploadStory,
@@ -46,6 +46,7 @@ function HomeScreen() {
   const [query, setQuery] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userId, setUserId] = useState("");
+  const [profile, setProfile] = useState(null);
   const [activeFilter, setActiveFilter] = useState("nearby");
   const [storyUploading, setStoryUploading] = useState(false);
 
@@ -61,7 +62,12 @@ function HomeScreen() {
   const unreadCount = notifications.filter((notification) => !notification.read_at).length;
 
   useEffect(() => {
-    getSession().then(({ session }) => setUserId(session?.user?.id ?? ""));
+    getSession().then(({ session }) => {
+      if (session?.user) {
+        setUserId(session.user.id);
+        fetchProfile(session.user.id).then(data => data && setProfile(data)).catch(() => {});
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -180,7 +186,7 @@ function HomeScreen() {
 
   return (
     <PhoneShell withNav>
-      <StatusBar />
+      
       <div className="flex items-center justify-between px-5 py-3">
         <div className="flex items-center gap-2">
           <ThemeToggle />
