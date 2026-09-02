@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { MapPin, Plus, Search, Zap, X, User, Share2, Trash2, ChevronRight, ChevronLeft } from "lucide-react";
+import { MapPin, Plus, Search, Zap, X, User, Share2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import LiveMap from "@/components/LiveMap";
@@ -49,8 +49,8 @@ function HomeScreen() {
   const [activeFilter, setActiveFilter] = useState("nearby");
   const [storyUploading, setStoryUploading] = useState(false);
 
-  // حالة عرض تسلسل الستوريات (مثل إنستغرام)
-  const [activeStoryGroup, setActiveStoryGroup] = useState(null); // قائمة ستوريات المستخدم المحدد
+  // حالة عرض تسلسل الستوريات (Instagram Grouping)
+  const [activeStoryGroup, setActiveStoryGroup] = useState(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
 
   const dataState = useRemoteData(() => fetchHomeData({ query }), [query]);
@@ -63,7 +63,7 @@ function HomeScreen() {
     getSession().then(({ session }) => setUserId(session?.user?.id ?? ""));
   }, []);
 
-  // 1. تصفية الستوريات المنتهية (أكثر من 24 ساعة)
+  // 1. تصفية الستوريات المنتهية (24 ساعة)
   const validStories = (rawData.stories || []).filter((s) => {
     if (!s.created_at) return true;
     const createdAt = new Date(s.created_at).getTime();
@@ -71,7 +71,7 @@ function HomeScreen() {
     return now - createdAt < 24 * 60 * 60 * 1000;
   });
 
-  // 2. تجميع الستوريات حسب المستخدم (Instagram Grouping)
+  // 2. تجميع الستوريات حسب المستخدم
   const groupedStories = validStories.reduce((acc, story) => {
     const ownerId = story.user_id || "unknown";
     if (!acc[ownerId]) {
@@ -104,6 +104,22 @@ function HomeScreen() {
     }
   };
 
+  const handleShareStory = async (story) => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "قصة على جوك",
+          text: `شاهد قصة ${story.title || "لاعب"} على جوك!`,
+          url,
+        });
+      } catch {}
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast.success("تم نسخ رابط القصة");
+    }
+  };
+
   const handleDeleteCurrentStory = async (storyId) => {
     try {
       await deleteStory(storyId);
@@ -127,10 +143,9 @@ function HomeScreen() {
         <Avatar name="" size="h-10 w-10" online />
       </div>
 
-      {/* شريط الستوريات المنظم - دائرة واحدة لكل مستخدم */}
+      {/* شريط الستوريات */}
       <div className="flex gap-4 overflow-x-auto px-5 pb-3 no-scrollbar" dir="rtl">
-        
-        {/* دائرة "قصتك" (تجمع ستورياتك + زر الرفع) */}
+        {/* قصتك */}
         <div className="flex flex-col items-center gap-1.5 shrink-0">
           <div className="relative flex items-center justify-center">
             {myStoryGroup ? (
@@ -140,7 +155,7 @@ function HomeScreen() {
                   setActiveStoryGroup(myStoryGroup);
                   setActiveStoryIndex(0);
                 }}
-                className="flex h-16 w-16 items-center justify-center rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 shadow-md"
+                className="flex h-16 w-16 items-center justify-center rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 shadow-md transition-transform active:scale-95"
               >
                 <span className="h-full w-full rounded-full border-2 border-background overflow-hidden bg-slate-900 flex items-center justify-center">
                   <User className="h-6 w-6 text-white" />
@@ -152,7 +167,6 @@ function HomeScreen() {
               </div>
             )}
 
-            {/* أيقونة + لرفع قصة جديدة في كل الأوقات */}
             <label className="absolute -bottom-1 -left-1 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-primary text-white shadow-md border-2 border-background transition-transform active:scale-90">
               {storyUploading ? "..." : <Plus className="h-3.5 w-3.5" />}
               <input
@@ -180,7 +194,7 @@ function HomeScreen() {
           <span className="text-[11px] font-medium text-foreground">قصتك</span>
         </div>
 
-        {/* دواير الأصدقاء واللاعبين الآخرين */}
+        {/* قصص باقي اللاعبين */}
         {otherStoryGroups.map((group) => {
           const firstStory = group.stories[0];
           const mediaUrl = firstStory?.media_url || firstStory?.image_url || firstStory?.url;
@@ -215,7 +229,7 @@ function HomeScreen() {
         })}
       </div>
 
-      {/* عارض القصة التسلسلي (Instagram Story Viewer Modal) */}
+      {/* عارض القصة الكامل للشاشة بنسبة 100% (Full Viewport Matching Device Screen) */}
       {activeStoryGroup && (() => {
         const currentStory = activeStoryGroup.stories[activeStoryIndex];
         const mediaUrl = currentStory?.media_url || currentStory?.image_url || currentStory?.url;
@@ -224,101 +238,104 @@ function HomeScreen() {
         const isMyStory = currentStory?.user_id === userId;
 
         return (
-          <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 select-none">
-            <div className="relative h-[80vh] max-h-[700px] w-full max-w-sm rounded-3xl overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl flex flex-col justify-between">
-              
-              {/* الشريط العلوي المقسم حسب عدد ستوريات المستخدم (Progress Bars) */}
-              <div className="absolute top-0 inset-x-0 z-20 p-4 bg-gradient-to-b from-black/80 via-black/40 to-transparent">
-                <div className="flex gap-1.5 mb-3">
-                  {activeStoryGroup.stories.map((s, idx) => (
-                    <div key={s.id || idx} className="h-1 flex-1 rounded-full bg-white/30 overflow-hidden">
-                      <div
-                        className={`h-full bg-white transition-all duration-300 ${
-                          idx === activeStoryIndex ? "w-full" : idx < activeStoryIndex ? "w-full opacity-80" : "w-0"
-                        }`}
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-full border border-white/50 overflow-hidden bg-slate-800 flex items-center justify-center">
-                      <User className="h-4 w-4 text-white" />
-                    </div>
-                    <div className="flex flex-col text-right">
-                      <span className="text-xs font-bold text-white drop-shadow">
-                        {activeStoryGroup.userName}
-                      </span>
-                      <span className="text-[10px] text-slate-300">{timeAgo}</span>
-                    </div>
+          <div className="fixed inset-0 z-[999] h-[100dvh] w-full bg-black select-none flex flex-col justify-between overflow-hidden">
+            {/* الشريط العلوي */}
+            <div className="absolute top-0 inset-x-0 z-30 p-4 pt-6 bg-gradient-to-b from-black/90 via-black/50 to-transparent">
+              <div className="flex gap-1.5 mb-3">
+                {activeStoryGroup.stories.map((s, idx) => (
+                  <div key={s.id || idx} className="h-1 flex-1 rounded-full bg-white/30 overflow-hidden">
+                    <div
+                      className={`h-full bg-white transition-all duration-300 ${
+                        idx === activeStoryIndex ? "w-full" : idx < activeStoryIndex ? "w-full opacity-80" : "w-0"
+                      }`}
+                    />
                   </div>
-
-                  <div className="flex items-center gap-1.5">
-                    {isMyStory && (
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteCurrentStory(currentStory.id)}
-                        className="p-1.5 rounded-full bg-rose-600/80 text-white hover:bg-rose-700 transition"
-                        title="حذف القصة"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveStoryGroup(null);
-                        setActiveStoryIndex(0);
-                      }}
-                      className="p-1.5 rounded-full bg-black/40 text-white hover:bg-black/70 transition"
-                    >
-                      <X className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
+                ))}
               </div>
 
-              {/* أزرار التنقل باللمس أو الأسهم للستوري التالي/السابق */}
-              <button
-                type="button"
-                onClick={handlePrevStory}
-                className="absolute left-2 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-black/30 text-white/80 hover:bg-black/60"
-              >
-                <ChevronLeft className="h-6 w-6" />
-              </button>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-9 w-9 rounded-full border border-white/50 overflow-hidden bg-slate-800 flex items-center justify-center">
+                    <User className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="flex flex-col text-right">
+                    <span className="text-xs font-bold text-white drop-shadow">
+                      {activeStoryGroup.userName}
+                    </span>
+                    <span className="text-[10px] text-slate-300">{timeAgo}</span>
+                  </div>
+                </div>
 
-              <button
-                type="button"
-                onClick={handleNextStory}
-                className="absolute right-2 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-black/30 text-white/80 hover:bg-black/60"
-              >
-                <ChevronRight className="h-6 w-6" />
-              </button>
+                <div className="flex items-center gap-2 z-40">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleShareStory(currentStory);
+                    }}
+                    className="p-2 rounded-full bg-black/40 text-white hover:bg-black/70 transition"
+                    title="مشاركة"
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </button>
 
-              {/* محتوى الستوري */}
-              <div
-                className="relative h-full w-full flex items-center justify-center bg-black cursor-pointer"
-                onContextMenu={(e) => e.preventDefault()}
-                onClick={handleNextStory}
-              >
-                {isVideo ? (
-                  <video
-                    src={mediaUrl}
-                    autoPlay
-                    controlsList="nodownload"
-                    className="h-full w-full object-cover"
-                  />
-                ) : mediaUrl ? (
-                  <img
-                    src={mediaUrl}
-                    alt="قصة"
-                    onDragStart={(e) => e.preventDefault()}
-                    className="h-full w-full object-cover select-none"
-                  />
-                ) : (
-                  <p className="text-sm text-slate-400">الوسائط غير متوفرة</p>
-                )}
+                  {isMyStory && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteCurrentStory(currentStory.id);
+                      }}
+                      className="p-2 rounded-full bg-rose-600/80 text-white hover:bg-rose-700 transition"
+                      title="حذف القصة"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveStoryGroup(null);
+                      setActiveStoryIndex(0);
+                    }}
+                    className="p-2 rounded-full bg-black/40 text-white hover:bg-black/70 transition"
+                    title="إغلاق"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* الصورة/الفيديو بأبعاد الشاشة الكاملة 100% */}
+            <div 
+              className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden"
+              onContextMenu={(e) => e.preventDefault()}
+            >
+              {isVideo ? (
+                <video
+                  src={mediaUrl}
+                  autoPlay
+                  controlsList="nodownload"
+                  className="w-full h-full object-cover"
+                />
+              ) : mediaUrl ? (
+                <img
+                  src={mediaUrl}
+                  alt="قصة"
+                  onDragStart={(e) => e.preventDefault()}
+                  className="w-full h-full object-cover select-none"
+                />
+              ) : (
+                <p className="text-sm text-slate-400">الوسائط غير متوفرة</p>
+              )}
+
+              {/* مناطق النقر باللمس للتنقل السريع */}
+              <div className="absolute inset-0 flex z-20">
+                <div className="w-[35%] h-full cursor-pointer" onClick={handlePrevStory} />
+                <div className="w-[65%] h-full cursor-pointer" onClick={handleNextStory} />
               </div>
             </div>
           </div>
