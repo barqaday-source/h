@@ -17,7 +17,7 @@ export async function uploadStory(file) {
   const { data, error } = await client
     .from("stories")
     .insert({ user_id: userId, title: file.name.replace(/\\.[^/.]+$/, ""), image_url: publicUrlData.publicUrl })
-    .select("id,title,image_url,created_at")
+    .select("*")
     .single();
   if (error) throw error;
   return data;
@@ -48,7 +48,7 @@ export async function fetchHomeData({ query = "" } = {}) {
       .limit(20),
     client
       .from("venues")
-      .select("id,name,name,address,address_ar,latitude,longitude,region_id,verified_at")
+      .select("id,name,address,latitude,longitude")
       .not("latitude", "is", null)
       .not("longitude", "is", null)
       .limit(100),
