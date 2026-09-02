@@ -432,3 +432,9 @@ export async function updateProfile(userId, updates) {
   const { error } = await client.from("profiles").update(updates).eq("id", userId);
   if (error) throw error;
 }
+
+export async function deleteStory(storyId) {
+  const client = requireSupabase();
+  const { error } = await client.from("stories").delete().eq("id", storyId);
+  if (error) throw error;
+}

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { MapPin, Plus, Search, Zap, X, User } from "lucide-react";
+import { MapPin, Plus, Search, Zap, X, User, Share2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import LiveMap from "@/components/LiveMap";
@@ -19,6 +19,7 @@ import {
   joinMatch,
   markNotificationRead,
   uploadStory,
+  deleteStory,
   respondToInvitation,
 } from "@/lib/data";
 import { getSession, requireSupabase } from "@/lib/supabase";
@@ -36,6 +37,19 @@ export const Route = createFileRoute("/home")({
   component: HomeScreen,
 });
 
+function getTimeAgo(dateString) {
+  if (!dateString) return "الآن";
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+
+  if (diffInMinutes < 1) return "الآن";
+  if (diffInMinutes < 60) return `منذ ${diffInMinutes} دقيقة`;
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `منذ ${diffInHours} ساعة`;
+  return "منذ يوم";
+}
+
 function HomeScreen() {
   const [query, setQuery] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -46,9 +60,17 @@ function HomeScreen() {
 
   const dataState = useRemoteData(() => fetchHomeData({ query }), [query]);
   const notificationsState = useRemoteData(fetchNotifications, []);
-  const data = dataState.data ?? { stories: [], nearbyMatches: [], mapPins: [] };
+  const rawData = dataState.data ?? { stories: [], nearbyMatches: [], mapPins: [] };
   const notifications = notificationsState.data ?? [];
   const unreadCount = notifications.filter((notification) => !notification.read_at).length;
+
+  // تصفية القصص لتعرض فقط ما تم رفعه خلال آخر 24 ساعة
+  const validStories = (rawData.stories || []).filter((s) => {
+    if (!s.created_at) return true;
+    const createdAt = new Date(s.created_at).getTime();
+    const now = new Date().getTime();
+    return now - createdAt < 24 * 60 * 60 * 1000;
+  });
 
   useEffect(() => {
     getSession().then(({ session }) => setUserId(session?.user?.id ?? ""));
@@ -93,6 +115,33 @@ function HomeScreen() {
     }
   };
 
+  const handleShareStory = async (story) => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "قصة على جوك",
+          text: `شاهد قصة ${story.title || "لاعب"} على جوك!`,
+          url,
+        });
+      } catch {}
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast.success("تم نسخ رابط الصفحة للصلات");
+    }
+  };
+
+  const handleDeleteStory = async (storyId) => {
+    try {
+      await deleteStory(storyId);
+      toast.success("تم حذف القصة بنجاح");
+      setSelectedStory(null);
+      await dataState.reload();
+    } catch (error) {
+      toast.error("تعذر حذف القصة حالياً");
+    }
+  };
+
   return (
     <PhoneShell withNav>
       <StatusBar />
@@ -131,7 +180,7 @@ function HomeScreen() {
         </div>
       ) : null}
 
-      {/* شريط الستوريات بدوائر انستغرام */}
+      {/* شريط الستوريات المؤقتة (24 ساعة) */}
       <div className="flex gap-4 overflow-x-auto px-5 pb-3 no-scrollbar" dir="rtl">
         <label className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0">
           <span className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-dashed border-primary bg-surface text-primary transition-transform active:scale-95">
@@ -160,7 +209,7 @@ function HomeScreen() {
           />
         </label>
 
-        {data.stories.map((story) => {
+        {validStories.map((story) => {
           const mediaUrl = story.media_url || story.image_url || story.url;
           const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
           return (
@@ -173,31 +222,33 @@ function HomeScreen() {
               <span className="flex h-16 w-16 items-center justify-center rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 shadow-md">
                 <span className="h-full w-full rounded-full border-2 border-background overflow-hidden bg-slate-900 flex items-center justify-center">
                   {isVideo ? (
-                    <video src={mediaUrl} className="h-full w-full object-cover" />
+                    <video src={mediaUrl} className="h-full w-full object-cover pointer-events-none" />
                   ) : mediaUrl ? (
-                    <img src={mediaUrl} alt="ستوري" className="h-full w-full object-cover" />
+                    <img src={mediaUrl} alt="ستوري" className="h-full w-full object-cover pointer-events-none" />
                   ) : (
                     <User className="h-6 w-6 text-muted-foreground" />
                   )}
                 </span>
               </span>
-              <span className="text-[11px] text-muted-foreground truncate w-16 text-center dir-rtl">
-                {story.profiles?.full_name || story.title || "قصة لاعب"}
+              <span className="text-[11px] text-muted-foreground truncate w-16 text-center">
+                {story.profiles?.full_name || story.title || "لاعب"}
               </span>
             </button>
           );
         })}
       </div>
 
-      {/* قالب عرض القصة (Instagram / TikTok Viewer) */}
+      {/* قالب عرض القصة المطور مع وقت النشر والمشاركة والحذف وحماية التنزيل */}
       {selectedStory && (() => {
         const mediaUrl = selectedStory.media_url || selectedStory.image_url || selectedStory.url;
         const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
+        const timeAgo = getTimeAgo(selectedStory.created_at);
+
         return (
-          <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 select-none">
             <div className="relative h-[78vh] max-h-[680px] w-full max-w-sm rounded-3xl overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl flex flex-col justify-between">
               
-              {/* شريط التقدم العلوي والمعلومات */}
+              {/* الشريط العلوي: الصورة والاسم والوقت وأزرار الإجراءات */}
               <div className="absolute top-0 inset-x-0 z-20 p-4 bg-gradient-to-b from-black/80 via-black/40 to-transparent">
                 <div className="h-1 w-full bg-white/30 rounded-full overflow-hidden mb-3">
                   <div className="h-full bg-white w-full animate-pulse" />
@@ -207,34 +258,61 @@ function HomeScreen() {
                     <div className="h-8 w-8 rounded-full border border-white/50 overflow-hidden bg-slate-800 flex items-center justify-center">
                       <User className="h-4 w-4 text-white" />
                     </div>
-                    <span className="text-xs font-bold text-white drop-shadow">
-                      {selectedStory.profiles?.full_name || selectedStory.title || "لاعب جوك"}
-                    </span>
+                    <div className="flex flex-col text-right">
+                      <span className="text-xs font-bold text-white drop-shadow">
+                        {selectedStory.profiles?.full_name || selectedStory.title || "لاعب جوك"}
+                      </span>
+                      <span className="text-[10px] text-slate-300">{timeAgo}</span>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedStory(null)}
-                    className="p-1.5 rounded-full bg-black/40 text-white hover:bg-black/70 transition"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleShareStory(selectedStory)}
+                      className="p-1.5 rounded-full bg-black/40 text-white hover:bg-black/70 transition"
+                      title="مشاركة"
+                    >
+                      <Share2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteStory(selectedStory.id)}
+                      className="p-1.5 rounded-full bg-rose-600/80 text-white hover:bg-rose-700 transition"
+                      title="حذف القصة"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStory(null)}
+                      className="p-1.5 rounded-full bg-black/40 text-white hover:bg-black/70 transition"
+                      title="إغلاق"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* محتوى القصة (صورة / فيديو) */}
-              <div className="relative h-full w-full flex items-center justify-center bg-black">
+              {/* محتوى القصة المصورة/الفيديو الممنوع من الحفظ والتنزيل المباشر */}
+              <div 
+                className="relative h-full w-full flex items-center justify-center bg-black"
+                onContextMenu={(e) => e.preventDefault()}
+              >
                 {isVideo ? (
                   <video
                     src={mediaUrl}
                     autoPlay
-                    controls
-                    className="h-full w-full object-cover"
+                    controlsList="nodownload"
+                    className="h-full w-full object-cover pointer-events-auto"
                   />
                 ) : mediaUrl ? (
                   <img
                     src={mediaUrl}
                     alt="القصة"
-                    className="h-full w-full object-cover"
+                    onDragStart={(e) => e.preventDefault()}
+                    className="h-full w-full object-cover pointer-events-none select-none"
                   />
                 ) : (
                   <p className="text-sm text-slate-400">عنصر الوسائط غير متوفر</p>
@@ -272,7 +350,7 @@ function HomeScreen() {
       <div className="px-5 pt-4">
         <div className="relative h-80 overflow-hidden rounded-3xl border border-border">
           <LiveMap
-            venues={data.mapPins}
+            venues={rawData.mapPins}
             onVenueClick={(venue) => toast.info(venue.address || `تم اختيار ${venue.name}`)}
             onLocate={(error) => error && toast.info("يرجى السماح بتحديد الموقع من إعدادات المتصفح")}
           />
@@ -283,22 +361,22 @@ function HomeScreen() {
             <Zap className="h-4 w-4" />
             فزعة
           </Link>
-          {data.nearbyMatches[0] ? (
+          {rawData.nearbyMatches[0] ? (
             <div className="absolute bottom-4 right-4 w-56 rounded-2xl border border-border bg-card/95 p-3 backdrop-blur">
               <p className="flex items-center justify-end gap-1 text-xs font-bold text-foreground">
-                {data.nearbyMatches[0].pitch}
+                {rawData.nearbyMatches[0].pitch}
                 <MapPin className="h-3.5 w-3.5 text-primary" />
               </p>
               <p className="pt-1 text-[11px] text-muted-foreground">
-                لعبة {data.nearbyMatches[0].format} • {data.nearbyMatches[0].distance}
+                لعبة {rawData.nearbyMatches[0].format} • {rawData.nearbyMatches[0].distance}
               </p>
               <div className="flex items-center justify-between pt-2.5">
                 <span className="text-[11px] text-muted-foreground">
-                  {data.nearbyMatches[0].slots}
+                  {rawData.nearbyMatches[0].slots}
                 </span>
                 <button
                   type="button"
-                  onClick={() => handleJoin(data.nearbyMatches[0].id)}
+                  onClick={() => handleJoin(rawData.nearbyMatches[0].id)}
                   className="rounded-xl bg-gradient-primary px-3 py-1.5 text-[11px] font-bold text-primary-foreground"
                 >
                   انضم
@@ -311,9 +389,9 @@ function HomeScreen() {
 
       <div className="px-5 pb-6 pt-5">
         <h2 className="pb-3 text-sm font-bold text-foreground">مباريات قريبة منك</h2>
-        <RemoteState {...dataState} empty={!data.nearbyMatches.length}>
+        <RemoteState {...dataState} empty={!rawData.nearbyMatches.length}>
           <div className="space-y-3">
-            {data.nearbyMatches.map((match) => (
+            {rawData.nearbyMatches.map((match) => (
               <div
                 key={match.id}
                 className="flex items-center justify-between rounded-2xl border border-border bg-card p-3.5"
