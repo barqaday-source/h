@@ -14,17 +14,9 @@ export function PhoneShell({ children, withNav = false }) {
   );
 }
 
+/** تعطيل الشريط الوهمي والوقت 9:41 نهائياً */
 export function StatusBar() {
-  return (
-    <div className="flex items-center justify-between px-6 pt-4 text-[11px] font-semibold text-muted-foreground">
-      <span>9:41</span>
-      <div className="flex items-center gap-1">
-        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
-        <span className="h-1.5 w-3 rounded-full bg-muted-foreground" />
-        <span className="h-1.5 w-5 rounded-full bg-muted-foreground" />
-      </div>
-    </div>
-  );
+  return null;
 }
 
 export function ThemeToggle({ className = "" }) {
@@ -43,13 +35,41 @@ export function ThemeToggle({ className = "" }) {
   );
 }
 
-export function Logo({ size = "text-2xl" }) {
+/** مكون الشعار المتجهي الاصلي عالي الجودة لتطبيق جوّك */
+export function Logo({ size = "h-10", className = "" }) {
   return (
-    <div className={`font-black tracking-tight flex items-center select-none ${size}`}>
-      <span className="relative inline-block text-primary font-extrabold">
-        حوّك
-        <span className="absolute right-[3px] -bottom-[2px] w-2.5 h-2.5 rounded-full bg-white border border-gray-300 shadow-sm"></span>
-      </span>
+    <div className={`inline-flex items-center justify-center select-none ${className}`}>
+      <svg 
+        viewBox="0 0 320 260" 
+        className={`w-auto ${size} drop-shadow-sm transition-transform duration-200 hover:scale-105`}
+        fill="none" 
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <linearGradient id="jawkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#1e3e3b" />
+            <stop offset="50%" stopColor="#2dd4bf" />
+            <stop offset="100%" stopColor="#d97706" />
+          </linearGradient>
+        </defs>
+
+        {/* الأقواس الدائرية المتدرجة */}
+        <path d="M 65 130 A 100 100 0 0 1 245 35" stroke="url(#jawkGrad)" strokeWidth="6.5" strokeLinecap="round" />
+        <path d="M 225 220 A 100 100 0 0 1 65 190" stroke="url(#jawkGrad)" strokeWidth="6.5" strokeLinecap="round" />
+
+        {/* اسم جوّك الخطي المترابط */}
+        <g fill="currentColor" className="text-[#1e3e3b] dark:text-emerald-300">
+          <path d="M 265 135 C 255 105, 215 100, 190 125 C 170 143, 175 173, 195 180 C 220 190, 245 160, 230 140 C 215 120, 165 133, 140 163 C 123 185, 135 210, 160 210 C 185 210, 190 183, 173 170 C 155 155, 115 173, 93 155 C 73 139, 67 100, 40 135 C 23 160, 45 187, 77 187 C 113 187, 133 147, 105 127 C 87 113, 60 135, 83 145 Z" />
+          <path d="M 75 123 C 63 111, 70 98, 83 105 C 95 113, 87 131, 75 123 Z" />
+        </g>
+
+        {/* أيقونة الكرة الفسفورية في الأسفل */}
+        <g transform="translate(225, 155)">
+          <circle cx="22" cy="22" r="22" fill="#a3e635" />
+          <circle cx="22" cy="22" r="16" fill="none" stroke="#4d7c0f" strokeWidth="2" strokeDasharray="4 2" />
+          <polygon points="22,12 29,17 26,26 18,26 15,17" fill="#4d7c0f" />
+        </g>
+      </svg>
     </div>
   );
 }
