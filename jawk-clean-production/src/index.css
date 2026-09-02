@@ -6,3 +6,11 @@
 .leaflet-control-container {
   z-index: 10 !important;
 }
+
+/* إصلاح تداخل عناصر التحكم لخريطة Leaflet مع النوافذ والستوري */
+.leaflet-top,
+.leaflet-bottom,
+.leaflet-pane,
+.leaflet-control-container {
+  z-index: 10 !important;
+}
