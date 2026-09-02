@@ -1,0 +1,7 @@
+# Rename this file to .env in the project root.
+# Client-safe values only. Never add SUPABASE_SERVICE_ROLE_KEY here.
+
+VITE_SUPABASE_URL=https://vohlleqcuomudoryiwkc.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_3urEhc4yX6zmKo8kMKNWfg_OuQYhqUF
+VITE_CARTO_KEY=PUT_YOUR_FREE_CARTO_KEY_HERE
+VITE_DEFAULT_MATCH_ID=PUT_MATCH_UUID_HERE

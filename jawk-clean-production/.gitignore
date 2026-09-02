@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+.output/
+dist/
+build/
+.expo/
+coverage/
+.cache/
+.tanstack/
+.workspace/
+.wrangler/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs and OS files
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+
+# Supabase local runtime
+supabase/.temp/
+supabase/.branches/
+
+# Native tooling
+android/.gradle/
+android/app/build/
+ios/Pods/
+ios/build/
