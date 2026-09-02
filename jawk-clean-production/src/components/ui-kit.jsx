@@ -43,11 +43,17 @@ export function ThemeToggle({ className = "" }) {
   );
 }
 
-export function Logo({ size = "text-4xl" }) {
+export function Logo({ size = "text-2xl" }) {
   return (
-    <h1 className={`${size} font-extrabold tracking-tight text-foreground`}>
-      جوك<span className="text-primary">.</span>
-    </h1>
+    <div className={`font-black tracking-tight flex items-center select-none ${size}`}>
+      <span className="text-primary font-extrabold flex items-center">
+        ج
+        <span className="inline-flex items-center justify-center w-2.5 h-2.5 mx-0.5 rounded-full bg-emerald-500 border border-emerald-300 shadow-sm relative top-[2px]">
+          <span className="w-1 h-1 rounded-full bg-white"></span>
+        </span>
+        وّك
+      </span>
+    </div>
   );
 }
 
