@@ -46,12 +46,9 @@ export function ThemeToggle({ className = "" }) {
 export function Logo({ size = "text-2xl" }) {
   return (
     <div className={`font-black tracking-tight flex items-center select-none ${size}`}>
-      <span className="text-primary font-extrabold flex items-center">
-        ج
-        <span className="inline-flex items-center justify-center w-2.5 h-2.5 mx-0.5 rounded-full bg-emerald-500 border border-emerald-300 shadow-sm relative top-[2px]">
-          <span className="w-1 h-1 rounded-full bg-white"></span>
-        </span>
-        وّك
+      <span className="relative inline-block text-primary font-extrabold">
+        حوّك
+        <span className="absolute right-[3px] -bottom-[2px] w-2.5 h-2.5 rounded-full bg-emerald-500 border border-emerald-300 shadow-sm"></span>
       </span>
     </div>
   );
