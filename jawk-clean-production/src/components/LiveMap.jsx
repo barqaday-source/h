@@ -12,6 +12,7 @@ export default function LiveMap({ venues = [], onVenueClick, onLocate }) {
   const mapRef = useRef(null);
   const leafletRef = useRef(null);
   const markersRef = useRef([]);
+  const userMarkerRef = useRef(null);
   const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
@@ -23,15 +24,15 @@ export default function LiveMap({ venues = [], onVenueClick, onLocate }) {
         6,
       );
       L.control.zoom({ position: "topright" }).addTo(map);
-      const cartoKey = import.meta.env.VITE_CARTO_KEY;
-      const cartoTiles = `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png${cartoKey ? `?key=${encodeURIComponent(cartoKey)}` : ""}`;
-      L.tileLayer(cartoTiles, {
-        subdomains: "abcd",
-        maxZoom: 20,
+
+      // اعتماد خرائط OpenStreetMap المباشرة بدون الحاجة لأي مفتاح API
+      const osmTiles = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+      L.tileLayer(osmTiles, {
+        maxZoom: 19,
         attribution:
-          '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        crossOrigin: true,
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       }).addTo(map);
+
       leafletRef.current = L;
       mapRef.current = map;
       setMapReady(true);
@@ -82,13 +83,24 @@ export default function LiveMap({ venues = [], onVenueClick, onLocate }) {
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         const point = [coords.latitude, coords.longitude];
-        mapRef.current?.setView(point, 14);
         const L = leafletRef.current;
-        if (L && mapRef.current) L.circle(point, { radius: 80, color: "#1f5a4a", fillOpacity: 0.1 }).addTo(mapRef.current);
+        const map = mapRef.current;
+
+        if (map && L) {
+          map.setView(point, 15);
+          if (userMarkerRef.current) userMarkerRef.current.remove();
+          userMarkerRef.current = L.circle(point, {
+            radius: 80,
+            color: "#2563eb",
+            fillColor: "#3b82f6",
+            fillOpacity: 0.4,
+          }).addTo(map);
+        }
+
         onLocate?.(null, { latitude: coords.latitude, longitude: coords.longitude });
       },
       (error) => onLocate?.(error),
-      { enableHighAccuracy: false, maximumAge: 300000, timeout: 10000 },
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 },
     );
   };
 
@@ -98,7 +110,7 @@ export default function LiveMap({ venues = [], onVenueClick, onLocate }) {
         type="button"
         aria-label="موقعي"
         onClick={locate}
-        className="absolute top-3 left-3 z-[500] flex h-9 w-9 items-center justify-center rounded-full bg-surface text-foreground shadow-card"
+        className="absolute top-3 left-3 z-[500] flex h-9 w-9 items-center justify-center rounded-full bg-surface text-foreground shadow-card hover:bg-surface/80"
       >
         ⊙
       </button>
