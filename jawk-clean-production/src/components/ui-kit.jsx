@@ -48,7 +48,7 @@ export function Logo({ size = "text-2xl" }) {
     <div className={`font-black tracking-tight flex items-center select-none ${size}`}>
       <span className="relative inline-block text-primary font-extrabold">
         حوّك
-        <span className="absolute right-[3px] -bottom-[2px] w-2.5 h-2.5 rounded-full bg-emerald-500 border border-emerald-300 shadow-sm"></span>
+        <span className="absolute right-[3px] -bottom-[2px] w-2.5 h-2.5 rounded-full bg-white border border-gray-300 shadow-sm"></span>
       </span>
     </div>
   );
