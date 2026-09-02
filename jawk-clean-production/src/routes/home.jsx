@@ -291,7 +291,7 @@ function HomeScreen() {
         const timeAgo = getTimeAgo(currentStory?.created_at);
 
         return (
-          <div className="fixed inset-0 z-[999] h-[100dvh] w-full bg-black select-none flex flex-col justify-between overflow-hidden animate-in fade-in duration-200">
+          <div className="fixed inset-0 z-[99999] h-[100dvh] w-full bg-black select-none flex flex-col justify-between overflow-hidden animate-in fade-in duration-200">
             <div className="absolute top-0 inset-x-0 z-30 p-4 pt-6 bg-gradient-to-b from-black/90 via-black/50 to-transparent">
               <div className="flex gap-1.5 mb-3">
                 {activeStoryGroup.stories.map((s, idx) => (
