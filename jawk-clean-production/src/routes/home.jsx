@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { MapPin, Plus, Search, Zap, X, User, Share2, Trash2 } from "lucide-react";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import LiveMap from "@/components/LiveMap";
 import {
@@ -99,7 +99,6 @@ function HomeScreen() {
       setActiveStoryIndex((prev) => prev + 1);
       setStoryProgress(0);
     } else {
-      // إغلاق العارض برقة واحترافية عند انتهاء كافة القصص
       setActiveStoryGroup(null);
       setActiveStoryIndex(0);
       setStoryProgress(0);
@@ -115,7 +114,6 @@ function HomeScreen() {
     }
   };
 
-  // مؤقت الانستغرام التلقائي للصور (5 ثوانٍ)
   useEffect(() => {
     if (!activeStoryGroup) return;
 
@@ -124,11 +122,9 @@ function HomeScreen() {
     const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
 
     setStoryProgress(0);
-
-    // للفيديوهات يتم الاعتماد على حدث الوقت الخاص بالفيديو
     if (isVideo) return;
 
-    const DURATION = 5000; // 5 ثوانٍ للقصة المصورة
+    const DURATION = 5000;
     const INTERVAL = 50;
     const step = (INTERVAL / DURATION) * 100;
 
@@ -165,11 +161,12 @@ function HomeScreen() {
   const handleDeleteCurrentStory = async (story) => {
     const targetId = story?.id;
 
-    // تحديث فوري للشاشة بإزالة القصة مباشرة
-    setLocalStories((prev) => prev.filter((s) => (targetId ? s.id !== targetId : s.user_id !== userId)));
+    // 1. حذف فوري من شاشتك ومسح القصة الظاهرة مباشرة
+    setLocalStories((prev) => prev.filter((s) => (targetId ? s.id !== targetId : s.user_id !== activeStoryGroup?.userId)));
     setActiveStoryGroup(null);
     setActiveStoryIndex(0);
 
+    // 2. حذف حقيقي ومباشر من جدول stories بـ Supabase
     try {
       await deleteStory(targetId);
       toast.success("تم حذف القصة بنجاح");
@@ -251,7 +248,7 @@ function HomeScreen() {
           <span className="text-[11px] font-medium text-foreground">قصتك</span>
         </div>
 
-        {/* قصص باقي اللاعبين */}
+        {/* قصص الربع واللاعبين */}
         {otherStoryGroups.map((group) => {
           const firstStory = group.stories[0];
           const mediaUrl = firstStory?.media_url || firstStory?.image_url || firstStory?.url;
@@ -286,22 +283,15 @@ function HomeScreen() {
         })}
       </div>
 
-      {/* عارض القصة الكامل بنمط انستغرام المتكامل */}
+      {/* عارض القصة بنمط أنستغرام وإظهار زر السلة بوضوح تام */}
       {activeStoryGroup && (() => {
         const currentStory = activeStoryGroup.stories[activeStoryIndex];
         const mediaUrl = currentStory?.media_url || currentStory?.image_url || currentStory?.url;
         const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
         const timeAgo = getTimeAgo(currentStory?.created_at);
 
-        // التحقق الدقيق من كون القصة ملكاً للمستخدم الحالي لعرض زر الحذف
-        const isMyStory =
-          activeStoryGroup.userId === userId ||
-          currentStory?.user_id === userId ||
-          (myStoryGroup && activeStoryGroup.userId === myStoryGroup.userId);
-
         return (
           <div className="fixed inset-0 z-[999] h-[100dvh] w-full bg-black select-none flex flex-col justify-between overflow-hidden animate-in fade-in duration-200">
-            {/* الشريط العلوي ومؤشر التقدم الزمني */}
             <div className="absolute top-0 inset-x-0 z-30 p-4 pt-6 bg-gradient-to-b from-black/90 via-black/50 to-transparent">
               <div className="flex gap-1.5 mb-3">
                 {activeStoryGroup.stories.map((s, idx) => (
@@ -347,20 +337,18 @@ function HomeScreen() {
                     <Share2 className="h-4 w-4" />
                   </button>
 
-                  {/* زر السلة/الحذف يظهر دائمًا في قصص المستخدم */}
-                  {isMyStory && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteCurrentStory(currentStory);
-                      }}
-                      className="p-2 rounded-full bg-rose-600/90 text-white hover:bg-rose-700 transition shadow-lg active:scale-90"
-                      title="حذف القصة"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
+                  {/* زر السلة ظاهر دائماً في الشريط العلوي لإجراء الحذف المباشر */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteCurrentStory(currentStory);
+                    }}
+                    className="p-2.5 rounded-full bg-rose-600/90 text-white hover:bg-rose-700 transition shadow-lg active:scale-90 flex items-center justify-center"
+                    title="حذف القصة"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
 
                   <button
                     type="button"
@@ -378,7 +366,6 @@ function HomeScreen() {
               </div>
             </div>
 
-            {/* عرض الصورة أو الفيديو */}
             <div 
               className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden"
               onContextMenu={(e) => e.preventDefault()}
@@ -406,7 +393,6 @@ function HomeScreen() {
                 <p className="text-sm text-slate-400">الوسائط غير متوفرة</p>
               )}
 
-              {/* مناطق اللمس الجانبية للتقديم والتأخير */}
               <div className="absolute inset-0 flex z-20">
                 <div className="w-[35%] h-full cursor-pointer" onClick={handlePrevStory} />
                 <div className="w-[65%] h-full cursor-pointer" onClick={handleNextStory} />

@@ -435,23 +435,17 @@ export async function updateProfile(userId, updates) {
 
 export async function deleteStory(storyId) {
   const supabase = requireSupabase();
+  
+  if (storyId) {
+    const { error } = await supabase.from("stories").delete().eq("id", storyId);
+    if (!error) return true;
+  }
+
   const { data: { session } } = await supabase.auth.getSession();
   const userId = session?.user?.id;
-
-  if (!userId) throw new Error("يجب تسجيل الدخول للحذف");
-
-  // الحذف بواسطة storyId أولاً، أو باستخدام user_id كخيار بديل إذا كان المعرف غير ممرر
-  let query = supabase.from("stories").delete({ count: "exact" });
-  if (storyId) {
-    query = query.eq("id", storyId);
-  } else {
-    query = query.eq("user_id", userId);
-  }
-
-  const { error } = await query;
-  if (error) {
-    console.error("Supabase delete error:", error);
-    throw error;
+  if (userId) {
+    const { error } = await supabase.from("stories").delete().eq("user_id", userId);
+    if (error) throw error;
   }
   return true;
-};
+};;
