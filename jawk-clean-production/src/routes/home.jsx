@@ -20,7 +20,7 @@ import {
   uploadStory,
   deleteStory,
 } from "@/lib/data";
-import { getSession, requireSupabase } from "@/lib/supabase";
+import { getSession } from "@/lib/supabase";
 
 export const Route = createFileRoute("/home")({
   head: () => ({
@@ -49,7 +49,6 @@ function HomeScreen() {
   const [activeFilter, setActiveFilter] = useState("nearby");
   const [storyUploading, setStoryUploading] = useState(false);
 
-  // حالة عرض تسلسل الستوريات (Instagram Grouping)
   const [activeStoryGroup, setActiveStoryGroup] = useState(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
 
@@ -63,7 +62,6 @@ function HomeScreen() {
     getSession().then(({ session }) => setUserId(session?.user?.id ?? ""));
   }, []);
 
-  // 1. تصفية الستوريات المنتهية (24 ساعة)
   const validStories = (rawData.stories || []).filter((s) => {
     if (!s.created_at) return true;
     const createdAt = new Date(s.created_at).getTime();
@@ -71,7 +69,6 @@ function HomeScreen() {
     return now - createdAt < 24 * 60 * 60 * 1000;
   });
 
-  // 2. تجميع الستوريات حسب المستخدم
   const groupedStories = validStories.reduce((acc, story) => {
     const ownerId = story.user_id || "unknown";
     if (!acc[ownerId]) {
@@ -125,9 +122,11 @@ function HomeScreen() {
       await deleteStory(storyId);
       toast.success("تم حذف القصة بنجاح");
       setActiveStoryGroup(null);
+      setActiveStoryIndex(0);
       await dataState.reload();
     } catch (error) {
-      toast.error("تعذر حذف القصة");
+      console.error(error);
+      toast.error("تعذر حذف القصة من قاعدة البيانات");
     }
   };
 
@@ -143,7 +142,6 @@ function HomeScreen() {
         <Avatar name="" size="h-10 w-10" online />
       </div>
 
-      {/* شريط الستوريات */}
       <div className="flex gap-4 overflow-x-auto px-5 pb-3 no-scrollbar" dir="rtl">
         {/* قصتك */}
         <div className="flex flex-col items-center gap-1.5 shrink-0">
@@ -158,7 +156,15 @@ function HomeScreen() {
                 className="flex h-16 w-16 items-center justify-center rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 shadow-md transition-transform active:scale-95"
               >
                 <span className="h-full w-full rounded-full border-2 border-background overflow-hidden bg-slate-900 flex items-center justify-center">
-                  <User className="h-6 w-6 text-white" />
+                  {myStoryGroup.stories[0]?.media_url || myStoryGroup.stories[0]?.image_url ? (
+                    <img
+                      src={myStoryGroup.stories[0]?.media_url || myStoryGroup.stories[0]?.image_url}
+                      alt="قصتك"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <User className="h-6 w-6 text-white" />
+                  )}
                 </span>
               </button>
             ) : (
@@ -194,7 +200,7 @@ function HomeScreen() {
           <span className="text-[11px] font-medium text-foreground">قصتك</span>
         </div>
 
-        {/* قصص باقي اللاعبين */}
+        {/* قصص الربع والأصدقاء */}
         {otherStoryGroups.map((group) => {
           const firstStory = group.stories[0];
           const mediaUrl = firstStory?.media_url || firstStory?.image_url || firstStory?.url;
@@ -229,17 +235,16 @@ function HomeScreen() {
         })}
       </div>
 
-      {/* عارض القصة الكامل للشاشة بنسبة 100% (Full Viewport Matching Device Screen) */}
+      {/* عارض القصة للشاشة كاملة 100% */}
       {activeStoryGroup && (() => {
         const currentStory = activeStoryGroup.stories[activeStoryIndex];
         const mediaUrl = currentStory?.media_url || currentStory?.image_url || currentStory?.url;
         const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
         const timeAgo = getTimeAgo(currentStory?.created_at);
-        const isMyStory = currentStory?.user_id === userId;
+        const isMyStory = currentStory?.user_id === userId || activeStoryGroup.userId === userId;
 
         return (
           <div className="fixed inset-0 z-[999] h-[100dvh] w-full bg-black select-none flex flex-col justify-between overflow-hidden">
-            {/* الشريط العلوي */}
             <div className="absolute top-0 inset-x-0 z-30 p-4 pt-6 bg-gradient-to-b from-black/90 via-black/50 to-transparent">
               <div className="flex gap-1.5 mb-3">
                 {activeStoryGroup.stories.map((s, idx) => (
@@ -284,7 +289,7 @@ function HomeScreen() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDeleteCurrentStory(currentStory.id);
+                        handleDeleteCurrentStory(currentStory?.id);
                       }}
                       className="p-2 rounded-full bg-rose-600/80 text-white hover:bg-rose-700 transition"
                       title="حذف القصة"
@@ -309,30 +314,18 @@ function HomeScreen() {
               </div>
             </div>
 
-            {/* الصورة/الفيديو بأبعاد الشاشة الكاملة 100% */}
             <div 
               className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden"
               onContextMenu={(e) => e.preventDefault()}
             >
               {isVideo ? (
-                <video
-                  src={mediaUrl}
-                  autoPlay
-                  controlsList="nodownload"
-                  className="w-full h-full object-cover"
-                />
+                <video src={mediaUrl} autoPlay className="w-full h-full object-cover" />
               ) : mediaUrl ? (
-                <img
-                  src={mediaUrl}
-                  alt="قصة"
-                  onDragStart={(e) => e.preventDefault()}
-                  className="w-full h-full object-cover select-none"
-                />
+                <img src={mediaUrl} alt="قصة" className="w-full h-full object-cover select-none" />
               ) : (
                 <p className="text-sm text-slate-400">الوسائط غير متوفرة</p>
               )}
 
-              {/* مناطق النقر باللمس للتنقل السريع */}
               <div className="absolute inset-0 flex z-20">
                 <div className="w-[35%] h-full cursor-pointer" onClick={handlePrevStory} />
                 <div className="w-[65%] h-full cursor-pointer" onClick={handleNextStory} />
