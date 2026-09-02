@@ -48,7 +48,7 @@ export async function fetchHomeData({ query = "" } = {}) {
       .limit(20),
     client
       .from("venues")
-      .select("id,name,name_ar,address,address_ar,latitude,longitude,region_id,verified_at")
+      .select("id,name,name,address,address_ar,latitude,longitude,region_id,verified_at")
       .not("latitude", "is", null)
       .not("longitude", "is", null)
       .limit(100),
