@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { MapPin, Plus, Search, Zap, X } from "lucide-react";
+import { MapPin, Plus, Search, Zap, X, User } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import LiveMap from "@/components/LiveMap";
@@ -131,11 +131,11 @@ function HomeScreen() {
         </div>
       ) : null}
 
-      {/* قسم الستوريات بتصميم انستغرام */}
-      <div className="flex gap-4 overflow-x-auto px-5 pb-2 no-scrollbar" dir="rtl">
-        <label className="flex flex-col items-center gap-1.5 cursor-pointer">
-          <span className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-dashed border-primary bg-surface text-primary">
-            {storyUploading ? "..." : <Plus className="h-5 w-5" />}
+      {/* شريط الستوريات بدوائر انستغرام */}
+      <div className="flex gap-4 overflow-x-auto px-5 pb-3 no-scrollbar" dir="rtl">
+        <label className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0">
+          <span className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-dashed border-primary bg-surface text-primary transition-transform active:scale-95">
+            {storyUploading ? "..." : <Plus className="h-6 w-6" />}
           </span>
           <span className="text-[11px] font-medium text-muted-foreground">أضف قصة</span>
           <input
@@ -161,46 +161,89 @@ function HomeScreen() {
         </label>
 
         {data.stories.map((story) => {
-          const imageUrl = story.image_url || story.media_url || story.url;
+          const mediaUrl = story.media_url || story.image_url || story.url;
+          const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
           return (
             <button
               key={story.id}
               type="button"
-              className="flex flex-col items-center gap-1.5"
+              className="flex flex-col items-center gap-1.5 shrink-0 transition-transform active:scale-95"
               onClick={() => setSelectedStory(story)}
             >
-              <span className="flex h-14 w-14 items-center justify-center rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600">
-                <img
-                  src={imageUrl}
-                  alt={story.title || "قصة"}
-                  className="h-full w-full rounded-full object-cover border border-background"
-                />
+              <span className="flex h-16 w-16 items-center justify-center rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 shadow-md">
+                <span className="h-full w-full rounded-full border-2 border-background overflow-hidden bg-slate-900 flex items-center justify-center">
+                  {isVideo ? (
+                    <video src={mediaUrl} className="h-full w-full object-cover" />
+                  ) : mediaUrl ? (
+                    <img src={mediaUrl} alt="ستوري" className="h-full w-full object-cover" />
+                  ) : (
+                    <User className="h-6 w-6 text-muted-foreground" />
+                  )}
+                </span>
               </span>
-              <span className="text-[11px] text-muted-foreground truncate w-14 text-center">
-                {story.title || "لاعب"}
+              <span className="text-[11px] text-muted-foreground truncate w-16 text-center dir-rtl">
+                {story.profiles?.full_name || story.title || "قصة لاعب"}
               </span>
             </button>
           );
         })}
       </div>
 
-      {/* نافذة عرض الستوري عند النقر */}
-      {selectedStory && (
-        <div className="fixed inset-0 z-[999] flex flex-col items-center justify-center bg-black/90 p-4">
-          <button
-            type="button"
-            onClick={() => setSelectedStory(null)}
-            className="absolute top-6 right-6 text-white p-2"
-          >
-            <X className="h-7 w-7" />
-          </button>
-          <img
-            src={selectedStory.image_url || selectedStory.media_url || selectedStory.url}
-            alt="القصة"
-            className="max-h-[80vh] max-w-full rounded-2xl object-contain"
-          />
-        </div>
-      )}
+      {/* قالب عرض القصة (Instagram / TikTok Viewer) */}
+      {selectedStory && (() => {
+        const mediaUrl = selectedStory.media_url || selectedStory.image_url || selectedStory.url;
+        const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
+        return (
+          <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+            <div className="relative h-[78vh] max-h-[680px] w-full max-w-sm rounded-3xl overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl flex flex-col justify-between">
+              
+              {/* شريط التقدم العلوي والمعلومات */}
+              <div className="absolute top-0 inset-x-0 z-20 p-4 bg-gradient-to-b from-black/80 via-black/40 to-transparent">
+                <div className="h-1 w-full bg-white/30 rounded-full overflow-hidden mb-3">
+                  <div className="h-full bg-white w-full animate-pulse" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-full border border-white/50 overflow-hidden bg-slate-800 flex items-center justify-center">
+                      <User className="h-4 w-4 text-white" />
+                    </div>
+                    <span className="text-xs font-bold text-white drop-shadow">
+                      {selectedStory.profiles?.full_name || selectedStory.title || "لاعب جوك"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStory(null)}
+                    className="p-1.5 rounded-full bg-black/40 text-white hover:bg-black/70 transition"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* محتوى القصة (صورة / فيديو) */}
+              <div className="relative h-full w-full flex items-center justify-center bg-black">
+                {isVideo ? (
+                  <video
+                    src={mediaUrl}
+                    autoPlay
+                    controls
+                    className="h-full w-full object-cover"
+                  />
+                ) : mediaUrl ? (
+                  <img
+                    src={mediaUrl}
+                    alt="القصة"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <p className="text-sm text-slate-400">عنصر الوسائط غير متوفر</p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="px-5 pt-3">
         <label className="flex items-center gap-2 rounded-2xl border border-border bg-surface px-4 py-3">
