@@ -1,5 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { MapPin, Plus, Search, Zap, X, User, Share2, Trash2 } from "lucide-react";
+import {
+  MapPin,
+  Plus,
+  Search,
+  Zap,
+  X,
+  User,
+  Share2,
+  Trash2,
+  Eye,
+  ChevronUp,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import LiveMap from "@/components/LiveMap";
@@ -18,8 +29,10 @@ import {
   fetchNotifications,
   uploadStory,
   deleteStory,
+  recordStoryView,
+  fetchStoryViewers,
 } from "@/lib/data";
-import { getSession } from "@/lib/supabase";
+import { getSession, supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/home")({
   head: () => ({
@@ -54,6 +67,11 @@ function HomeScreen() {
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
   const [storyProgress, setStoryProgress] = useState(0);
 
+  // حالات ميزة المشاهدات الجديدة
+  const [showViewersModal, setShowViewersModal] = useState(false);
+  const [currentViewers, setCurrentViewers] = useState([]);
+  const [loadingViewers, setLoadingViewers] = useState(false);
+
   const dataState = useRemoteData(() => fetchHomeData({ query }), [query]);
   const notificationsState = useRemoteData(fetchNotifications, []);
   const rawData = dataState.data ?? { stories: [], nearbyMatches: [], mapPins: [] };
@@ -64,7 +82,9 @@ function HomeScreen() {
     getSession().then(({ session }) => {
       if (session?.user) {
         setUserId(session.user.id);
-        fetchProfile(session.user.id).then((data) => data && setProfile(data)).catch(() => {});
+        fetchProfile(session.user.id)
+          .then((data) => data && setProfile(data))
+          .catch(() => {});
       }
     });
   }, []);
@@ -107,6 +127,7 @@ function HomeScreen() {
       setActiveStoryGroup(null);
       setActiveStoryIndex(0);
       setStoryProgress(0);
+      setShowViewersModal(false);
     }
   };
 
@@ -119,15 +140,59 @@ function HomeScreen() {
     }
   };
 
+  // تسجيل المشاهدة واستجلاَب المشاهدين عند التنقل بين القصص
   useEffect(() => {
     if (!activeStoryGroup) return;
 
     const currentStory = activeStoryGroup.stories[activeStoryIndex];
+    if (!currentStory?.id) return;
+
+    // 1. إذا كانت القصة لشخص آخر، سجل المشاهدة
+    if (activeStoryGroup.userId !== userId && userId) {
+      if (typeof recordStoryView === "function") {
+        recordStoryView(currentStory.id, userId).catch(() => {});
+      } else if (supabase) {
+        supabase
+          .from("story_views")
+          .upsert(
+            { story_id: currentStory.id, viewer_id: userId, viewed_at: new Date().toISOString() },
+            { onConflict: "story_id,viewer_id" }
+          )
+          .then();
+      }
+    }
+
+    // 2. إذا كانت قصتي أنا، جلب قائمة المشاهدين بالبروفايلات
+    if (activeStoryGroup.userId === userId) {
+      setLoadingViewers(true);
+      const loadViewers = async () => {
+        try {
+          if (typeof fetchStoryViewers === "function") {
+            const list = await fetchStoryViewers(currentStory.id);
+            setCurrentViewers(list || []);
+          } else if (currentStory.viewers) {
+            setCurrentViewers(currentStory.viewers);
+          } else if (supabase) {
+            const { data } = await supabase
+              .from("story_views")
+              .select("id, viewed_at, profiles:viewer_id(id, full_name, avatar_url, position)")
+              .eq("story_id", currentStory.id);
+            setCurrentViewers(data || []);
+          }
+        } catch {
+          setCurrentViewers(currentStory.viewers || []);
+        } finally {
+          setLoadingViewers(false);
+        }
+      };
+      loadViewers();
+    }
+
     const mediaUrl = currentStory?.media_url || currentStory?.image_url || currentStory?.url;
     const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
 
     setStoryProgress(0);
-    if (isVideo) return;
+    if (isVideo || showViewersModal) return; // توقيف مؤقت إذا كانت القائمة مفتوحة
 
     const DURATION = 5000;
     const INTERVAL = 50;
@@ -145,7 +210,7 @@ function HomeScreen() {
     }, INTERVAL);
 
     return () => clearInterval(timer);
-  }, [activeStoryGroup, activeStoryIndex]);
+  }, [activeStoryGroup, activeStoryIndex, showViewersModal]);
 
   const handleShareStory = async (story) => {
     const url = window.location.href;
@@ -171,6 +236,7 @@ function HomeScreen() {
     );
     setActiveStoryGroup(null);
     setActiveStoryIndex(0);
+    setShowViewersModal(false);
 
     try {
       await deleteStory(targetId);
@@ -317,7 +383,7 @@ function HomeScreen() {
           </label>
         </div>
 
-        {/* أزرار الفلاتر والتصنيفات الشفافة والتطابق */}
+        {/* أزرار الفلاتر والتصنيفات */}
         <div className="flex items-center gap-2.5 overflow-x-auto px-5 pt-3 pb-1 no-scrollbar" dir="rtl">
           {[
             { id: "nearby", label: "اللعبات القريبة" },
@@ -363,9 +429,12 @@ function HomeScreen() {
             currentStory?.media_url || currentStory?.image_url || currentStory?.url;
           const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
           const timeAgo = getTimeAgo(currentStory?.created_at);
+          const isMyStory = activeStoryGroup.userId === userId;
+          const viewersCount = currentViewers?.length || currentStory?.views_count || currentStory?.viewers_count || 0;
 
           return (
             <div className="fixed inset-0 z-[99999] h-[100dvh] w-full bg-black select-none flex flex-col justify-between overflow-hidden animate-in fade-in duration-200">
+              {/* الترويسة العلوية لعارض الاستوري */}
               <div className="absolute top-0 inset-x-0 z-30 p-4 pt-6 bg-gradient-to-b from-black/90 via-black/50 to-transparent">
                 <div className="flex gap-1.5 mb-3">
                   {activeStoryGroup.stories.map((s, idx) => (
@@ -414,17 +483,19 @@ function HomeScreen() {
                       <Share2 className="h-4 w-4" />
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteCurrentStory(currentStory);
-                      }}
-                      className="p-2.5 rounded-full bg-rose-600/90 text-white hover:bg-rose-700 transition shadow-lg active:scale-90 flex items-center justify-center"
-                      title="حذف القصة"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {isMyStory && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCurrentStory(currentStory);
+                        }}
+                        className="p-2.5 rounded-full bg-rose-600/90 text-white hover:bg-rose-700 transition shadow-lg active:scale-90 flex items-center justify-center"
+                        title="حذف القصة"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -432,6 +503,7 @@ function HomeScreen() {
                         e.stopPropagation();
                         setActiveStoryGroup(null);
                         setActiveStoryIndex(0);
+                        setShowViewersModal(false);
                       }}
                       className="p-2 rounded-full bg-black/40 text-white hover:bg-black/70 transition active:scale-90"
                       title="إغلاق"
@@ -442,6 +514,7 @@ function HomeScreen() {
                 </div>
               </div>
 
+              {/* جسم القصة الرئيسي */}
               <div
                 className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden"
                 onContextMenu={(e) => e.preventDefault()}
@@ -470,6 +543,7 @@ function HomeScreen() {
                   <p className="text-sm text-slate-400">الوسائط غير متوفرة</p>
                 )}
 
+                {/* مناطق النقر للتنقل */}
                 <div className="absolute inset-0 flex z-20">
                   <div
                     className="w-[35%] h-full cursor-pointer"
@@ -480,7 +554,107 @@ function HomeScreen() {
                     onClick={handleNextStory}
                   />
                 </div>
+
+                {/* زر مشاهدين قصتي السفلي (يظهر فقط لقصتك) */}
+                {isMyStory && (
+                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowViewersModal(true);
+                      }}
+                      className="flex items-center gap-2 rounded-full bg-black/60 backdrop-blur-md border border-white/20 px-4 py-2 text-white text-xs font-bold hover:bg-black/80 transition active:scale-95 shadow-xl"
+                    >
+                      <Eye className="h-4 w-4 text-emerald-400" />
+                      <span>{viewersCount} مشاهدة</span>
+                      <ChevronUp className="h-3.5 w-3.5 text-slate-400" />
+                    </button>
+                  </div>
+                )}
               </div>
+
+              {/* نافذة المشاهدين السفلية (Bottom Sheet Modal) */}
+              {showViewersModal && (
+                <div
+                  className="fixed inset-0 z-[100000] bg-black/70 backdrop-blur-sm flex flex-col justify-end animate-in fade-in duration-200"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowViewersModal(false);
+                  }}
+                >
+                  <div
+                    className="w-full max-h-[65dvh] bg-surface border-t border-border rounded-t-3xl p-5 flex flex-col gap-4 overflow-hidden animate-in slide-in-from-bottom duration-300"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* ترويسة النافذة */}
+                    <div className="flex items-center justify-between border-b border-border pb-3">
+                      <div className="flex items-center gap-2">
+                        <Eye className="h-5 w-5 text-emerald-500" />
+                        <h3 className="text-sm font-bold text-foreground">
+                          المشاهدات ({viewersCount})
+                        </h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowViewersModal(false)}
+                        className="p-1 rounded-full bg-surface-2 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    {/* قائمة بروفايلات المشاهدين */}
+                    <div className="flex-1 overflow-y-auto space-y-3 no-scrollbar" dir="rtl">
+                      {loadingViewers ? (
+                        <p className="text-center text-xs text-muted-foreground py-6">
+                          جاري تحميل المشاهدين...
+                        </p>
+                      ) : currentViewers.length > 0 ? (
+                        currentViewers.map((item, idx) => {
+                          const viewerProfile = item.profiles || item.user || item;
+                          const name = viewerProfile.full_name || viewerProfile.name || "لاعب جوك";
+                          const position = viewerProfile.position || "لاعب";
+                          const viewedAt = getTimeAgo(item.viewed_at || item.created_at);
+
+                          return (
+                            <Link
+                              key={item.id || idx}
+                              to={viewerProfile.id ? `/player/${viewerProfile.id}` : "#"}
+                              className="flex items-center justify-between p-2.5 rounded-2xl bg-surface-2/60 hover:bg-surface-2 transition"
+                              onClick={() => setShowViewersModal(false)}
+                            >
+                              <div className="flex items-center gap-3">
+                                <Avatar
+                                  name={name}
+                                  src={viewerProfile.avatar_url}
+                                  size="h-10 w-10"
+                                />
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-bold text-foreground">
+                                    {name}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {position}
+                                  </span>
+                                </div>
+                              </div>
+                              <span className="text-[10px] text-muted-foreground font-medium">
+                                {viewedAt}
+                              </span>
+                            </Link>
+                          );
+                        })
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground text-xs">
+                          <Eye className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                          لا توجد مشاهدات حتى الآن
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })()}
