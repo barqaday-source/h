@@ -35,14 +35,14 @@ export function ThemeToggle({ className = "" }) {
   );
 }
 
-/** مكون الشعار المتجهي الشفاف الموحد لتطبيق جوّك */
-export function Logo({ size = "h-12", showSlogan = true, className = "" }) {
+/** مكون الشعار الموحد والرسمي: كلمة "جَوَّك" الشفافة فقط وبدون أي نصوص مضافة */
+export function Logo({ size = "h-10", className = "" }) {
   return (
     <div className={`inline-flex items-center justify-center select-none ${className}`}>
       <svg
-        viewBox="0 0 400 140"
+        viewBox="0 0 200 80"
         role="img"
-        aria-label="جوك | جمع ربعك وعيش جوك"
+        aria-label="جوك"
         preserveAspectRatio="xMidYMid meet"
         className={`w-auto ${size} drop-shadow-sm transition-transform duration-200 hover:scale-105`}
         xmlns="http://www.w3.org/2000/svg"
@@ -50,22 +50,21 @@ export function Logo({ size = "h-12", showSlogan = true, className = "" }) {
         <defs>
           <style>{`
             @import url('https://fonts.googleapis.com/css2?family=Lalezar&display=swap');
-            .jawk-title { font-family: 'Lalezar', cursive, sans-serif; font-size: 72px; font-weight: 700; }
-            .jawk-sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
+            .jawk-title { font-family: 'Lalezar', cursive, sans-serif; font-size: 68px; font-weight: 700; }
           `}</style>
           <linearGradient id="jawkLogoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#34d399" />
             <stop offset="100%" stopColor="#059669" />
           </linearGradient>
           <filter id="jawkLogoGlow" x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="12" />
+            <feGaussianBlur stdDeviation="10" />
           </filter>
         </defs>
 
-        <circle cx="200" cy="60" r="55" fill="#10b981" opacity="0.12" filter="url(#jawkLogoGlow)" />
+        <circle cx="100" cy="40" r="38" fill="#10b981" opacity="0.15" filter="url(#jawkLogoGlow)" />
         <text
-          x="200"
-          y="78"
+          x="100"
+          y="58"
           textAnchor="middle"
           direction="rtl"
           fill="url(#jawkLogoGradient)"
@@ -73,17 +72,6 @@ export function Logo({ size = "h-12", showSlogan = true, className = "" }) {
         >
           جَوَّك
         </text>
-        {showSlogan && (
-          <text
-            x="200"
-            y="120"
-            textAnchor="middle"
-            fill="#a1a1aa"
-            className="jawk-sub"
-          >
-            جَمّع رَبْعَك وَعِيش جَوَّك
-          </text>
-        )}
       </svg>
     </div>
   );
