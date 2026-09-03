@@ -41,3 +41,5 @@ android/.gradle/
 android/app/build/
 ios/Pods/
 ios/build/
+.env
+.env.local
