@@ -30,6 +30,9 @@ function ChatScreen() {
   const [recording, setRecording] = useState(false);
   const [stickersOpen, setStickersOpen] = useState(false);
 
+  // مرجع التمرير التلقائي لأسفل القائمة عند وصول رسالة جديدة
+  const messagesEndRef = useRef(null);
+
   // حالات المكالمة الصوتية الحقيقية (WebRTC)
   const [inCall, setInCall] = useState(false);
   const [callStatus, setCallStatus] = useState("في الانتظار...");
@@ -66,17 +69,30 @@ function ChatScreen() {
   );
   const messages = messagesState.data ?? [];
 
+  // التمرير التلقائي لأسفل عند تحديث قائمة الرسائل
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // حفظ مرجع الدالة لتجنب إعادة تشغيل التمرير وإلغاء القنوات عند كل إعادة رسم
+  const reloadRef = useRef(messagesState.reload);
+  useEffect(() => {
+    reloadRef.current = messagesState.reload;
+  });
+
   // اشتراك الرسائل والإشارات الصوتية المباشرة عبر Supabase
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !matchId) return undefined;
 
-    // قناة الرسائل
+    // قناة الرسائل المباشرة لجميع التغييرات (إضافة / تعديل)
     const msgChannel = supabase
       .channel(`messages:${matchId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages", filter: `match_id=eq.${matchId}` },
-        () => messagesState.reload()
+        { event: "*", schema: "public", table: "messages" },
+        () => {
+          reloadRef.current?.();
+        }
       )
       .subscribe();
 
@@ -87,7 +103,6 @@ function ChatScreen() {
     callChannel
       .on("broadcast", { event: "webrtc-signal" }, async ({ payload }) => {
         if (!peerConnectionRef.current && payload.type === "offer") {
-          // استقبال مكالمة واردة من لاعب آخر
           await handleIncomingCall(payload.offer);
         } else if (peerConnectionRef.current) {
           if (payload.type === "answer") {
@@ -109,7 +124,7 @@ function ChatScreen() {
       supabase.removeChannel(msgChannel);
       supabase.removeChannel(callChannel);
     };
-  }, [matchId, messagesState.reload]);
+  }, [matchId]);
 
   // إعداد اتصال WebRTC الأصلي
   const createPeerConnection = () => {
@@ -378,46 +393,56 @@ function ChatScreen() {
       <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4 no-scrollbar">
         <RemoteState {...messagesState} empty={!messages.length}>
           <>
-            {messages.map((message) => (
-              <div
-                key={message.id || Math.random()}
-                className={`flex items-end gap-2 ${message.mine ? "flex-row" : "flex-row-reverse"}`}
-              >
-                {!message.mine ? <Avatar name={message.author} size="h-8 w-8" /> : null}
-                <div className={message.mine ? "text-left" : "text-right"}>
-                  {!message.mine ? (
-                    <p className="pb-1 text-[11px] text-muted-foreground">{message.author}</p>
-                  ) : null}
-                  <div
-                    className={`max-w-[15rem] rounded-2xl px-3.5 py-2.5 text-sm ${
-                      message.mine
-                        ? "bg-gradient-primary text-primary-foreground"
-                        : "border border-border bg-surface text-foreground"
-                    }`}
-                  >
-                    {message.messageType === "image" && message.attachmentUrl ? (
-                      <img
-                        src={message.attachmentUrl}
-                        alt={message.attachmentName || "مرفق"}
-                        className="mb-2 max-h-48 rounded-xl object-cover"
-                      />
+            {messages.map((message, index) => {
+              // توحيد قراءة الحقول بغض النظر عن مسمى العمود في قاعدة البيانات
+              const textContent = message.text || message.body || message.content;
+              const authorName = message.author || message.sender_id || message.user_id || "لاعب";
+              const mediaUrl = message.attachmentUrl || message.media_url;
+              const mediaType = message.messageType || message.media_type;
+              const formattedTime = message.time || (message.created_at ? new Date(message.created_at).toLocaleTimeString("ar-IQ", { hour: "2-digit", minute: "2-digit" }) : "الآن");
+
+              return (
+                <div
+                  key={message.id || index}
+                  className={`flex items-end gap-2 ${message.mine ? "flex-row" : "flex-row-reverse"}`}
+                >
+                  {!message.mine ? <Avatar name={authorName} size="h-8 w-8" /> : null}
+                  <div className={message.mine ? "text-left" : "text-right"}>
+                    {!message.mine ? (
+                      <p className="pb-1 text-[11px] text-muted-foreground">{authorName}</p>
                     ) : null}
-                    {message.attachmentUrl && message.messageType !== "image" ? (
-                      <a
-                        href={message.attachmentUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mb-1 block underline"
-                      >
-                        {message.attachmentName || "فتح المرفق"}
-                      </a>
-                    ) : null}
-                    {message.messageType === "text" || !message.messageType ? message.text || message.body : null}
+                    <div
+                      className={`max-w-[15rem] rounded-2xl px-3.5 py-2.5 text-sm ${
+                        message.mine
+                          ? "bg-gradient-primary text-primary-foreground"
+                          : "border border-border bg-surface text-foreground"
+                      }`}
+                    >
+                      {mediaType === "image" && mediaUrl ? (
+                        <img
+                          src={mediaUrl}
+                          alt={message.attachmentName || "مرفق"}
+                          className="mb-2 max-h-48 rounded-xl object-cover"
+                        />
+                      ) : null}
+                      {mediaUrl && mediaType !== "image" ? (
+                        <a
+                          href={mediaUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mb-1 block underline"
+                        >
+                          {message.attachmentName || "فتح المرفق"}
+                        </a>
+                      ) : null}
+                      {textContent ? <span>{textContent}</span> : null}
+                    </div>
+                    <p className="pt-1 text-[10px] text-muted-foreground">{formattedTime}</p>
                   </div>
-                  <p className="pt-1 text-[10px] text-muted-foreground">{message.time || "الآن"}</p>
                 </div>
-              </div>
-            ))}
+              );
+            })}
+            <div ref={messagesEndRef} />
           </>
         </RemoteState>
 
@@ -460,7 +485,7 @@ function ChatScreen() {
         </div>
       ) : null}
 
-      {/* شريط الأدوات الإرسال */}
+      {/* شريط الأدوات والإرسال */}
       <div className="flex items-center gap-2 border-t border-border px-4 py-3 bg-surface">
         <button
           type="button"
@@ -492,8 +517,8 @@ function ChatScreen() {
           />
           <button
             type="button"
-            disabled={sending}
             onClick={handleSend}
+            disabled={sending}
             aria-label="إرسال"
             className="text-primary disabled:opacity-50"
           >
