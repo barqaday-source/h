@@ -17,7 +17,7 @@ const GENERAL_MATCH_ID = "00000000-0000-0000-0000-000000000001";
 function playChatSound(type) {
   if (typeof window === "undefined") return;
   try {
-    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
     const context = new AudioContext();
     const oscillator = context.createOscillator();
