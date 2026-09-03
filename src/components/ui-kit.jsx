@@ -35,52 +35,42 @@ export function ThemeToggle({ className = "" }) {
   );
 }
 
-/** مكون الشعار المتجهي الاصلي عالي الجودة لتطبيق جوّك */
-export function Logo({ size = "h-12", className = "" }) {
+/** مكون الشعار الموحد والرسمي: كلمة "جَوَّك" الشفافة فقط وبدون أي نصوص مضافة */
+export function Logo({ size = "h-10", className = "" }) {
   return (
     <div className={`inline-flex items-center justify-center select-none ${className}`}>
       <svg
-        viewBox="0 0 400 160"
+        viewBox="0 0 200 80"
         role="img"
-        aria-label="جوك | جمع ربعك وعيش جوك"
+        aria-label="جوك"
         preserveAspectRatio="xMidYMid meet"
         className={`w-auto ${size} drop-shadow-sm transition-transform duration-200 hover:scale-105`}
         xmlns="http://www.w3.org/2000/svg"
       >
         <defs>
+          <style>{`
+            @import url('https://fonts.googleapis.com/css2?family=Lalezar&display=swap');
+            .jawk-title { font-family: 'Lalezar', cursive, sans-serif; font-size: 68px; font-weight: 700; }
+          `}</style>
           <linearGradient id="jawkLogoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#34d399" />
             <stop offset="100%" stopColor="#059669" />
           </linearGradient>
           <filter id="jawkLogoGlow" x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="12" />
+            <feGaussianBlur stdDeviation="10" />
           </filter>
         </defs>
-        <rect width="400" height="160" rx="16" fill="#0f172a" />
-        <circle cx="200" cy="70" r="60" fill="#10b981" opacity="0.1" filter="url(#jawkLogoGlow)" />
+
+        <circle cx="100" cy="40" r="38" fill="#10b981" opacity="0.15" filter="url(#jawkLogoGlow)" />
         <text
-          x="200"
-          y="88"
+          x="100"
+          y="58"
           textAnchor="middle"
           direction="rtl"
           fill="url(#jawkLogoGradient)"
-          fontFamily="Lalezar, Tajawal, Cairo, Arial, sans-serif"
-          fontSize="72"
-          fontWeight="700"
+          className="jawk-title"
         >
           جَوَّك
-        </text>
-        <text
-          x="200"
-          y="130"
-          textAnchor="middle"
-          fill="#a1a1aa"
-          fontFamily="system-ui, sans-serif"
-          fontSize="13"
-          fontWeight="600"
-          letterSpacing="0.5"
-        >
-          جَمّع رَبْعَك وَعِيش جَوَّك
         </text>
       </svg>
     </div>
@@ -106,7 +96,7 @@ export function Avatar({ name, size = "h-12 w-12", online = false, ring = false 
 
 export function Card({ children, className = "" }) {
   return (
-    <div className={`relative z-10 my-5 w-full rounded-3xl border border-border bg-card p-5 shadow-card sm:p-6 ${className}`}>
+    <div className={`relative z-10 my-4 rounded-2xl border border-border bg-card p-5 shadow-card ${className}`}>
       {children}
     </div>
   );
@@ -136,17 +126,20 @@ export function GhostButton({ children, className = "", ...props }) {
   );
 }
 
-export function Chip({ children, active = false }) {
+/** كارت / زر الفلتر السريع الثابت الذي لا ينكمش */
+export function Chip({ children, active = false, onClick }) {
   return (
-    <span
-      className={`inline-flex min-h-10 items-center whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold ${
+    <button
+      type="button"
+      onClick={onClick}
+      className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-all select-none ${
         active
-          ? "bg-primary text-primary-foreground"
-          : "border border-border bg-surface text-muted-foreground"
+          ? "bg-primary text-primary-foreground shadow-sm"
+          : "border border-border bg-surface text-muted-foreground hover:bg-surface-2"
       }`}
     >
       {children}
-    </span>
+    </button>
   );
 }
 
@@ -169,7 +162,7 @@ export function ProgressBar({ value }) {
 
 export function TopBar({ title, left = null, right = null }) {
   return (
-    <div className="flex items-center justify-between px-5 py-4">
+    <div className="flex items-center justify-between px-5 py-3">
       <div className="flex items-center gap-2">{right}</div>
       <h2 className="text-lg font-extrabold text-foreground">{title}</h2>
       <div className="flex items-center gap-2">{left}</div>
