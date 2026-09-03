@@ -276,3 +276,24 @@ function HomeScreen() {
               {isVideo? <video src={mediaUrl} autoPlay playsInline onTimeUpdate={(e) => setStoryProgress((e.currentTarget.currentTime / e.currentTarget.duration) * 100 || 0)} onEnded={handleNextStory} className="w-full h-full object-cover" /> : mediaUrl? <img src={mediaUrl} alt="قصة" className="w-full h-full object-cover" /> : <p className="text-sm text-slate-400">الوسائط غير متوفرة</p>}
               <div className="absolute inset-0 flex z-20"><div className="w-[35%] h-full" onClick={handlePrevStory} /><div className="w-[65%] h-full" onClick={handleNextStory} /></div>
               {isMyStory && <button onClick={() => setShowViewers(v =>!v)} className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-full bg-black/60 backdrop-blur px-5 py-2.5 text-white text-xs font-bold border border-white/10"><Eye className="h-4 w-4" />{viewers.length} مشاهدة</button>}
+            </div>
+            {showViewers && isMyStory && (
+              <div className="absolute bottom-0 inset-x-0 z-50 max-h-[55%] bg-zinc-900 rounded-t- p-4 overflow-y-auto">
+                <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" />
+                <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-bold text-white">المشاهدون {viewers.length}</h3><button onClick={() => setShowViewers(false)} className="p-1 rounded-full bg-white/10"><X className="h-4 w-4 text-white/70" /></button></div>
+                <div className="flex flex-col gap-3">
+                  {viewers.length === 0? <p className="text-xs text-white/50 text-center py-10">لا يوجد مشاهدين بعد</p> : viewers.map((v) => (
+                    <Link key={v.viewer_id + v.created_at} to={`/profile/${v.viewer_id}`} className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full overflow-hidden bg-zinc-800">{v.profiles?.avatar_url? <img src={v.profiles.avatar_url} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center"><User className="h-5 w-5 text-white/60" /></div>}</div>
+                      <div className="flex flex-col text-right"><span className="text-sm text-white">{v.profiles?.display_name || v.profiles?.full_name || "لاعب"}</span><span className="text- text-white/50">{getTimeAgo(v.created_at)}</span></div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+    </PhoneShell>
+  );
+}
