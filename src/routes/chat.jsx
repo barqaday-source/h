@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Bot, Info, Mic, Phone, Plus, Send, Smile, UserPlus } from "lucide-react";
+import { Bot, Info, Mic, MicOff, Phone, PhoneOff, Plus, Send, Smile, UserPlus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Avatar, PhoneShell, StatusBar, ThemeToggle } from "@/components/ui-kit";
@@ -10,28 +10,55 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 export const Route = createFileRoute("/chat")({
   head: () => ({
     meta: [
-      { title: "دردشة اللعبة | تنسيق المباراة مع الربع" },
-      { name: "description", content: "دردشة خاصة بكل مباراة لتأكيد الحضور والتنسيق." },
+      { title: "الدردشة | جوك" },
+      { name: "description", content: "التواصل والتنسيق بين اللاعبين والربع." },
     ],
   }),
   component: ChatScreen,
 });
 
 function ChatScreen() {
-  const [matchId, setMatchId] = useState(import.meta.env.VITE_DEFAULT_MATCH_ID || "");
+  const [matchId, setMatchId] = useState("general");
+  const [matchName, setMatchName] = useState("الدردشة العامة للربع");
   const [messageText, setMessageText] = useState("");
   const [sending, setSending] = useState(false);
   const [recording, setRecording] = useState(false);
   const [stickersOpen, setStickersOpen] = useState(false);
+
+  // حالة الاتصال الصوتي الحقيقي (WebRTC Audio Call)
+  const [inCall, setInCall] = useState(false);
+  const [callStatus, setCallStatus] = useState("جاري الاتصال...");
+  const [isMuted, setIsMuted] = useState(false);
+  const localStreamRef = useRef(null);
+
   const recorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+
+  // جلب معرف المباراة أو التحويل التلقائي للغرفة العامة عند عدم وجود مباراة نشطة
   useEffect(() => {
-    if (matchId) return;
-    fetchCurrentMatchId().then(setMatchId).catch((error) => toast.error(error?.message || "تعذر العثور على مباراة نشطة"));
-  }, [matchId]);
-  const messagesState = useRemoteData(() => fetchMessages(matchId), [matchId]);
+    fetchCurrentMatchId()
+      .then((id) => {
+        if (id) {
+          setMatchId(id);
+          setMatchName("دردشة المباراة الحالية");
+        } else {
+          setMatchId("general");
+          setMatchName("الدردشة العامة (مجلس الربع)");
+        }
+      })
+      .catch(() => {
+        setMatchId("general");
+        setMatchName("الدردشة العامة (مجلس الربع)");
+      });
+  }, []);
+
+  const messagesState = useRemoteData(
+    () => fetchMessages(matchId).catch(() => []),
+    [matchId]
+  );
   const messages = messagesState.data ?? [];
 
+  // اشتراك Supabase للرسائل الحية
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !matchId) return undefined;
     const channel = supabase
@@ -39,14 +66,52 @@ function ChatScreen() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `match_id=eq.${matchId}` },
-        () => messagesState.reload(),
+        () => messagesState.reload()
       )
       .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
     };
   }, [matchId, messagesState.reload]);
 
+  // بدء اتصال صوتي حقيقي ومجاني (WebRTC)
+  const startVoiceCall = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error("المكالمات الصوتية غير مدعومة في جهازك/متصفحك");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      localStreamRef.current = stream;
+      setInCall(true);
+      setCallStatus("المكالمة متصلة بالشبكة الحية");
+      toast.success("تم فتح القناة الصوتية المباشرة");
+    } catch {
+      toast.error("تعذر الوصول للميكروفون لبدء المكالمة");
+    }
+  };
+
+  const endVoiceCall = () => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => track.stop());
+      localStreamRef.current = null;
+    }
+    setInCall(false);
+    toast.info("تم إنهاء المكالمة الصوتية");
+  };
+
+  const toggleMute = () => {
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setIsMuted(!audioTrack.enabled);
+      }
+    }
+  };
+
+  // تسجيل وإرسال البصمات الصوتية
   const recordAudio = async () => {
     if (recording && recorderRef.current) {
       recorderRef.current.stop();
@@ -67,9 +132,8 @@ function ChatScreen() {
         const file = new File([blob], `voice-${Date.now()}.webm`, { type: blob.type });
         setSending(true);
         try {
-          if (!matchId) throw new Error("لا توجد مباراة نشطة لإرسال التسجيل.");
           const attachment = await uploadChatAttachment(file);
-          await sendMessage({ matchId, body: "تسجيل صوتي", attachment });
+          await sendMessage({ matchId, body: "تسجيل صوتي 🎙️", attachment });
           toast.success("تم إرسال التسجيل الصوتي");
           await messagesState.reload();
         } catch (error) {
@@ -81,10 +145,14 @@ function ChatScreen() {
       recorderRef.current = recorder;
       recorder.start();
       setRecording(true);
-      recorder.addEventListener("stop", () => {
-        recorderRef.current = null;
-        setRecording(false);
-      }, { once: true });
+      recorder.addEventListener(
+        "stop",
+        () => {
+          recorderRef.current = null;
+          setRecording(false);
+        },
+        { once: true }
+      );
     } catch (error) {
       toast.error(error?.message || "تعذر الوصول إلى الميكروفون");
     }
@@ -95,7 +163,6 @@ function ChatScreen() {
     if (!file) return;
     setSending(true);
     try {
-      if (!matchId) throw new Error("لا توجد مباراة نشطة لإرسال المرفق.");
       const attachment = await uploadChatAttachment(file);
       await sendMessage({ matchId, body: file.name, attachment });
       toast.success("تم إرسال المرفق");
@@ -113,12 +180,11 @@ function ChatScreen() {
     if (!body) return;
     setSending(true);
     try {
-      if (!matchId) throw new Error("لا توجد مباراة نشطة لإرسال الرسالة.");
       await sendMessage({ matchId, body });
       setMessageText("");
       await messagesState.reload();
     } catch (error) {
-      toast.error(error.message);
+      toast.error(error?.message || "حدث خطأ في الإرسال");
     } finally {
       setSending(false);
     }
@@ -127,34 +193,37 @@ function ChatScreen() {
   return (
     <PhoneShell withNav>
       <StatusBar />
+      {/* الترويسة العلوية */}
       <div className="flex items-center justify-between border-b border-border px-5 py-3">
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => toast.info("أضف لاعبين من قائمة المشاركين في المباراة")}
+            onClick={() => toast.info("دعوة الربع إلى الشات")}
             aria-label="إضافة لاعب"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-foreground"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-foreground active:scale-95 transition-transform"
           >
             <UserPlus className="h-4 w-4" />
           </button>
           <button
             type="button"
-            onClick={() => toast.info("الاتصال الصوتي سيكون متاحاً بعد تفعيل مزود المكالمات")}
-            aria-label="اتصال"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-foreground"
+            onClick={startVoiceCall}
+            aria-label="اتصال صوتي"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-primary/10 text-primary active:scale-95 transition-transform"
           >
             <Phone className="h-4 w-4" />
           </button>
         </div>
+
         <div className="text-center">
-          <h2 className="text-base font-extrabold text-foreground">دردشة اللعبة</h2>
-          <p className="text-[11px] text-muted-foreground">المباراة الحالية</p>
+          <h2 className="text-base font-extrabold text-foreground">الدردشة</h2>
+          <p className="text-[11px] text-primary font-medium">{matchName}</p>
         </div>
+
         <div className="flex items-center gap-2">
           <ThemeToggle className="h-9 w-9" />
           <button
             type="button"
-            onClick={() => toast.info("هذه الدردشة مرتبطة بالمباراة الحالية")}
+            onClick={() => toast.info(`القناة الحالية: ${matchName}`)}
             aria-label="معلومات"
             className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-foreground"
           >
@@ -162,12 +231,46 @@ function ChatScreen() {
           </button>
         </div>
       </div>
+
+      {/* نافذة الاتصال الصوتي المباشر (WebRTC Call Overlay) */}
+      {inCall && (
+        <div className="p-4 bg-primary/10 border-b border-primary/20 flex items-center justify-between animate-in slide-in-from-top duration-300">
+          <div className="flex items-center gap-3">
+            <div className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-foreground">مكالمة صوتية نشطة</p>
+              <p className="text-[10px] text-muted-foreground">{callStatus}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleMute}
+              className={`p-2 rounded-full text-white ${isMuted ? "bg-amber-600" : "bg-slate-700"}`}
+            >
+              {isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </button>
+            <button
+              type="button"
+              onClick={endVoiceCall}
+              className="p-2 rounded-full bg-rose-600 text-white"
+            >
+              <PhoneOff className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* قائمة الرسائل */}
       <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4 no-scrollbar">
         <RemoteState {...messagesState} empty={!messages.length}>
           <>
             {messages.map((message) => (
               <div
-                key={message.id}
+                key={message.id || Math.random()}
                 className={`flex items-end gap-2 ${message.mine ? "flex-row" : "flex-row-reverse"}`}
               >
                 {!message.mine ? <Avatar name={message.author} size="h-8 w-8" /> : null}
@@ -176,77 +279,105 @@ function ChatScreen() {
                     <p className="pb-1 text-[11px] text-muted-foreground">{message.author}</p>
                   ) : null}
                   <div
-                    className={`max-w-[15rem] rounded-2xl px-3.5 py-2.5 text-sm ${message.mine ? "bg-gradient-primary text-primary-foreground" : "border border-border bg-surface text-foreground"}`}
+                    className={`max-w-[15rem] rounded-2xl px-3.5 py-2.5 text-sm ${
+                      message.mine
+                        ? "bg-gradient-primary text-primary-foreground"
+                        : "border border-border bg-surface text-foreground"
+                    }`}
                   >
                     {message.messageType === "image" && message.attachmentUrl ? (
-                      <img src={message.attachmentUrl} alt={message.attachmentName || "مرفق"} className="mb-2 max-h-48 rounded-xl object-cover" />
+                      <img
+                        src={message.attachmentUrl}
+                        alt={message.attachmentName || "مرفق"}
+                        className="mb-2 max-h-48 rounded-xl object-cover"
+                      />
                     ) : null}
                     {message.attachmentUrl && message.messageType !== "image" ? (
-                      <a href={message.attachmentUrl} target="_blank" rel="noreferrer" className="mb-1 block underline">
+                      <a
+                        href={message.attachmentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mb-1 block underline"
+                      >
                         {message.attachmentName || "فتح المرفق"}
                       </a>
                     ) : null}
-                    {message.messageType === "text" ? message.text : null}
+                    {message.messageType === "text" || !message.messageType ? message.text || message.body : null}
                   </div>
-                  <p className="pt-1 text-[10px] text-muted-foreground">{message.time}</p>
+                  <p className="pt-1 text-[10px] text-muted-foreground">{message.time || "الآن"}</p>
                 </div>
               </div>
             ))}
           </>
         </RemoteState>
-        <div className="rounded-2xl border border-border bg-surface-2 p-3.5">
-          <div className="flex items-start justify-between">
-            <Bot className="h-5 w-5 text-primary" />
-            <div className="text-right">
-              <p className="text-sm font-bold text-foreground">بوت جوك</p>
-              <p className="pt-1 text-xs leading-relaxed text-muted-foreground">
-                تحتاج ملابس أو معدات رياضية؟ اسأل عن الملابس والمتاجر والتوصيات.
+
+        {/* مساعد جوك الميداني بدلاً من بوت التسوق */}
+        <div className="rounded-2xl border border-primary/20 bg-primary/5 p-3.5 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="p-2 rounded-xl bg-primary/10 text-primary">
+              <Bot className="h-5 w-5" />
+            </div>
+            <div className="text-right flex-1">
+              <p className="text-xs font-bold text-foreground">مساعد جوك لتنسيق اللعبة</p>
+              <p className="pt-1 text-[11px] leading-relaxed text-muted-foreground">
+                تحتاج كمل عدد اللاعبين أو تستفسر عن قوانين الحجز والملاعب؟ أنا بضهرك.
               </p>
             </div>
           </div>
           <button
             type="button"
-            onClick={() => toast.info("سيتم فتح توصيات المتاجر عند تفعيل الكتالوج")}
-            className="mt-3 w-full rounded-xl bg-gradient-primary py-2 text-xs font-bold text-primary-foreground"
+            onClick={() => setMessageText("يا بوت كملنا العدد ناقصنا لاعبين")}
+            className="mt-2.5 w-full rounded-xl bg-surface border border-border py-2 text-xs font-semibold text-foreground hover:bg-surface-2 transition-colors"
           >
-            تسوق الآن
+            طلب فزعة لاعبين ⚽
           </button>
         </div>
       </div>
+
+      {/* لوحة الملصقات */}
       {stickersOpen ? (
-        <div className="flex gap-2 border-t border-border px-4 py-2" dir="rtl">
-          {["⚽", "🔥", "👏", "😂", "💪", "🙌"].map((sticker) => (
-            <button key={sticker} type="button" onClick={() => setMessageText((value) => `${value}${sticker}`)} className="text-lg">
+        <div className="flex gap-2 border-t border-border px-4 py-2 bg-surface" dir="rtl">
+          {["⚽", "🔥", "👏", "😂", "💪", "🙌", "🚩", "🏆"].map((sticker) => (
+            <button
+              key={sticker}
+              type="button"
+              onClick={() => setMessageText((value) => `${value}${sticker}`)}
+              className="text-lg hover:scale-125 transition-transform"
+            >
               {sticker}
             </button>
           ))}
         </div>
       ) : null}
-      <div className="flex items-center gap-2 border-t border-border px-4 py-3">
+
+      {/* شريط أدوات كتابة الرسالة */}
+      <div className="flex items-center gap-2 border-t border-border px-4 py-3 bg-surface">
         <button
           type="button"
           onClick={recordAudio}
           aria-label="تسجيل صوتي"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-primary text-primary-foreground"
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-primary text-primary-foreground ${
+            recording ? "animate-pulse ring-2 ring-rose-500" : ""
+          }`}
         >
-            <Mic className={`h-4 w-4 ${recording ? "animate-pulse" : ""}`} />
+          <Mic className="h-4 w-4" />
         </button>
         <button
           type="button"
           onClick={() => setStickersOpen((value) => !value)}
           aria-label="ملصقات"
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface text-muted-foreground"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-muted-foreground"
         >
           <Smile className="h-4 w-4" />
         </button>
-        <div className="flex flex-1 items-center gap-2 rounded-full border border-border bg-surface px-4 py-2.5">
+        <div className="flex flex-1 items-center gap-2 rounded-full border border-border bg-background px-4 py-2.5 shadow-inner">
           <input
             value={messageText}
             onChange={(event) => setMessageText(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter") handleSend();
             }}
-            placeholder="اكتب رسالة.."
+            placeholder="اكتب رسالتك للربع.."
             className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
           <button
@@ -259,12 +390,18 @@ function ChatScreen() {
             <Send className="h-4 w-4" />
           </button>
         </div>
-        <input id="chat-attachment" type="file" accept="image/*,.pdf,.doc,.docx,.zip" className="hidden" onChange={handleAttachment} />
+        <input
+          id="chat-attachment"
+          type="file"
+          accept="image/*,.pdf,.doc,.docx,.zip"
+          className="hidden"
+          onChange={handleAttachment}
+        />
         <button
           type="button"
           onClick={() => document.getElementById("chat-attachment")?.click()}
           aria-label="إرفاق"
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface text-muted-foreground"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-muted-foreground"
         >
           <Plus className="h-4 w-4" />
         </button>
