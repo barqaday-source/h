@@ -40,7 +40,7 @@ export async function fetchHomeData({ query = "" } = {}) {
   const [storiesResult, matchesResult, pinsResult] = await Promise.all([
     client
      .from("stories")
-     .select("id,title,image_url,media_url,user_id,created_at,profiles:user_id(id,full_name,avatar_url)")
+     .select("id,title,image_url,media_url,user_id,created_at,profiles:user_id(id,full_name,avatar_url,display_name)")
      .order("created_at", { ascending: false })
      .limit(30),
     client
@@ -455,9 +455,9 @@ export async function deleteStory(storyId) {
   return true;
 }
 
-// ======================= ميزة المشاهدين الجديدة =======================
+// ======================= ميزة المشاهدين الجديدة - بدون تايب سكربت =======================
 
-export async function viewStory(storyId: string) {
+export async function viewStory(storyId) {
   if (!storyId) return;
   const client = requireSupabase();
   const { data: { session } } = await client.auth.getSession();
@@ -465,7 +465,7 @@ export async function viewStory(storyId: string) {
   if (!viewerId) return;
 
   const { data: story } = await client.from("stories").select("user_id").eq("id", storyId).single();
-  if (story?.user_id === viewerId) return; // صاحب القصة لا يحسب
+  if (story?.user_id === viewerId) return;
 
   await client.from("story_views").upsert(
     { story_id: storyId, viewer_id: viewerId },
@@ -473,7 +473,7 @@ export async function viewStory(storyId: string) {
   );
 }
 
-export async function fetchStoryViewers(storyId: string) {
+export async function fetchStoryViewers(storyId) {
   const client = requireSupabase();
   const { data, error } = await client
    .from("story_views")
@@ -487,14 +487,4 @@ export async function fetchStoryViewers(storyId: string) {
 
   if (error) throw error;
   return data?? [];
-}
-
-export async function fetchMyStoryViewersCount(userId: string) {
-  const client = requireSupabase();
-  const { data, error } = await client
-   .from("story_views")
-   .select("id, stories!inner(user_id)")
-   .eq("stories.user_id", userId);
-  if (error) throw error;
-  return data?.length?? 0;
 }
