@@ -40,31 +40,29 @@ export function Logo({ size = "h-12", className = "" }) {
   return (
     <div className={`inline-flex items-center justify-center select-none ${className}`}>
       <svg
-        viewBox="0 0 300 104"
+        viewBox="0 0 240 100"
         role="img"
         aria-label="جوك"
         className={`w-auto ${size} drop-shadow-sm transition-transform duration-200 hover:scale-105`}
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
       >
-        <defs>
-          <linearGradient id="jawkBrandGradient" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#0f766e" />
-            <stop offset="1" stopColor="#16a34a" />
-          </linearGradient>
-        </defs>
-
-        {/* علامة عصرية تجمع بين حركة الملعب والكرة */}
-        <path d="M18 67C25 28 62 11 96 25C118 34 127 56 119 76C111 96 84 103 65 91" stroke="url(#jawkBrandGradient)" strokeWidth="9" strokeLinecap="round" />
-        <path d="M30 77C51 88 74 86 94 73" stroke="#84cc16" strokeWidth="7" strokeLinecap="round" />
-        <path d="M31 83L25 96M45 86L42 101M59 87L60 101M73 84L78 98M86 78L94 91" stroke="#65a30d" strokeWidth="3" strokeLinecap="round" />
-        <circle cx="91" cy="35" r="17" fill="#f8fafc" stroke="#0f766e" strokeWidth="4" />
-        <path d="M91 25L97 30L95 38L87 40L82 33L85 26M82 33L73 36M95 38L101 46M87 40L84 50" stroke="#0f766e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-
-        {/* الاسم مكتوب بخط عربي واضح وأنيق */}
-        <text x="144" y="72" direction="rtl" textAnchor="middle" fill="currentColor" className="text-[#0f766e] dark:text-emerald-300" fontSize="49" fontWeight="800" fontFamily="Tajawal, Cairo, Arial, sans-serif">
-          جوك
+        {/* كلمة جوك فقط، مع كرة صغيرة بدل نقطة الجيم */}
+        <text
+          x="220"
+          y="70"
+          direction="rtl"
+          textAnchor="end"
+          fill="currentColor"
+          className="text-[#0f766e] dark:text-emerald-300"
+          fontSize="58"
+          fontWeight="800"
+          fontFamily="Tajawal, Cairo, Arial, sans-serif"
+        >
+          حوك
         </text>
+        <circle cx="203" cy="83" r="9" fill="#f8fafc" stroke="#0f766e" strokeWidth="3" />
+        <polygon points="203,77 208,81 206,87 200,87 198,81" fill="#0f766e" />
       </svg>
     </div>
   );
