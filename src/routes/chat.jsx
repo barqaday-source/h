@@ -1,604 +1,663 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { Info, Mic, MicOff, Phone, PhoneOff, Plus, Send, Smile, UserPlus } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  MapPin,
+  Plus,
+  Search,
+  Zap,
+  X,
+  User,
+  Share2,
+  Trash2,
+  Eye,
+  ChevronUp,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Avatar, PhoneShell, StatusBar, ThemeToggle } from "@/components/ui-kit";
-import { RemoteState, useRemoteData } from "@/hooks/use-app-data";
-import { fetchCurrentMatchId, fetchMessages, sendMessage, uploadChatAttachment } from "@/lib/data";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import LiveMap from "@/components/LiveMap";
+import {
+  Avatar,
+  Chip,
+  Logo,
+  NotificationButton,
+  PhoneShell,
+  ThemeToggle,
+} from "@/components/ui-kit";
+import { useRemoteData } from "@/hooks/use-app-data";
+import {
+  fetchHomeData,
+  fetchProfile,
+  fetchNotifications,
+  uploadStory,
+  deleteStory,
+  recordStoryView,
+  fetchStoryViewers,
+} from "@/lib/data";
+import { getSession, supabase } from "@/lib/supabase";
 
-export const Route = createFileRoute("/chat")({
+export const Route = createFileRoute("/home")({
   head: () => ({
-    meta: [
-      { title: "الدردشة | جوك" },
-      { name: "description", content: "التواصل والتنسيق بين اللاعبين والربع." },
-    ],
+    meta: [{ title: "الرئيسية | خريطة الملاعب والمباريات القريبة" }],
   }),
-  component: ChatScreen,
+  component: HomeScreen,
 });
 
-// خادم STUN المجاني من جوجل لربط الأجهزة عبر الإنترنت
-const ICE_SERVERS = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-};
+function getTimeAgo(dateString) {
+  if (!dateString) return "الآن";
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInMinutes = Math.floor((now - date) / (1000 * 60));
 
-// أيقونة روبوت الكابتن بصيغة SVG تفاعلية
-function BotCaptainSVG({ className = "h-10 w-10" }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" className={className}>
-      <defs>
-        <linearGradient id="capGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#10B981" />
-          <stop offset="100%" stopColor="#059669" />
-        </linearGradient>
-      </defs>
-      <circle cx="100" cy="100" r="90" fill="#0F172A" />
-      {/* Antenna/Ball Light */}
-      <line x1="100" y1="20" x2="100" y2="40" stroke="#F59E0B" strokeWidth="4" />
-      <circle cx="100" cy="20" r="8" fill="#F59E0B" />
-      {/* Head */}
-      <rect x="40" y="40" width="120" height="110" rx="40" fill="url(#capGrad)" />
-      {/* Visor */}
-      <rect x="55" y="65" width="90" height="52" rx="22" fill="#1E293B" stroke="#34D399" strokeWidth="2" />
-      {/* Glowing Eyes */}
-      <circle cx="80" cy="90" r="9" fill="#34D399" />
-      <circle cx="120" cy="90" r="9" fill="#34D399" />
-      <circle cx="82" cy="87" r="3" fill="#FFFFFF" />
-      <circle cx="122" cy="87" r="3" fill="#FFFFFF" />
-      {/* Headphones */}
-      <rect x="26" y="75" width="14" height="34" rx="7" fill="#F59E0B" />
-      <rect x="160" y="75" width="14" height="34" rx="7" fill="#F59E0B" />
-      {/* Smile */}
-      <path d="M 88 128 Q 100 138 112 128" stroke="#FFFFFF" strokeWidth="3" fill="none" strokeLinecap="round" />
-    </svg>
-  );
+  if (diffInMinutes < 1) return "الآن";
+  if (diffInMinutes < 60) return `منذ ${diffInMinutes} دقيقة`;
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `منذ ${diffInHours} ساعة`;
+  return "منذ يوم";
 }
 
-function ChatScreen() {
-  const [matchId, setMatchId] = useState("general");
-  const [matchName, setMatchName] = useState("الدردشة العامة للربع");
-  const [messageText, setMessageText] = useState("");
-  const [sending, setSending] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [stickersOpen, setStickersOpen] = useState(false);
+function HomeScreen() {
+  const [query, setQuery] = useState("");
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [userId, setUserId] = useState("");
+  const [profile, setProfile] = useState(null);
+  const [activeFilter, setActiveFilter] = useState("nearby");
+  const [storyUploading, setStoryUploading] = useState(false);
 
-  // مرجع التمرير التلقائي لأسفل القائمة عند وصول رسالة جديدة
-  const messagesEndRef = useRef(null);
+  const [localStories, setLocalStories] = useState([]);
+  const [activeStoryGroup, setActiveStoryGroup] = useState(null);
+  const [activeStoryIndex, setActiveStoryIndex] = useState(0);
+  const [storyProgress, setStoryProgress] = useState(0);
 
-  // حالات المكالمة الصوتية الحقيقية (WebRTC)
-  const [inCall, setInCall] = useState(false);
-  const [callStatus, setCallStatus] = useState("في الانتظار...");
-  const [isMuted, setIsMuted] = useState(false);
+  // حالات ميزة المشاهدات الجديدة
+  const [showViewersModal, setShowViewersModal] = useState(false);
+  const [currentViewers, setCurrentViewers] = useState([]);
+  const [loadingViewers, setLoadingViewers] = useState(false);
 
-  const localStreamRef = useRef(null);
-  const peerConnectionRef = useRef(null);
-  const remoteAudioRef = useRef(null);
-  const callChannelRef = useRef(null);
-
-  const recorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
+  const dataState = useRemoteData(() => fetchHomeData({ query }), [query]);
+  const notificationsState = useRemoteData(fetchNotifications, []);
+  const rawData = dataState.data ?? { stories: [], nearbyMatches: [], mapPins: [] };
+  const notifications = notificationsState.data ?? [];
+  const unreadCount = notifications.filter((notification) => !notification.read_at).length;
 
   useEffect(() => {
-    fetchCurrentMatchId()
-      .then((id) => {
-        if (id) {
-          setMatchId(id);
-          setMatchName("دردشة المباراة الحالية");
-        } else {
-          setMatchId("general");
-          setMatchName("الدردشة العامة (مجلس الربع)");
-        }
-      })
-      .catch(() => {
-        setMatchId("general");
-        setMatchName("الدردشة العامة (مجلس الربع)");
-      });
+    getSession().then(({ session }) => {
+      if (session?.user) {
+        setUserId(session.user.id);
+        fetchProfile(session.user.id)
+          .then((data) => data && setProfile(data))
+          .catch(() => {});
+      }
+    });
   }, []);
 
-  const messagesState = useRemoteData(
-    () => fetchMessages(matchId).catch(() => []),
-    [matchId]
-  );
-  const messages = messagesState.data ?? [];
-
-  // التمرير التلقائي لأسفل عند تحديث قائمة الرسائل
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (rawData.stories) {
+      setLocalStories(rawData.stories);
+    }
+  }, [rawData.stories]);
 
-  // حفظ مرجع الدالة لتجنب إعادة تشغيل التمرير وإلغاء القنوات عند كل إعادة رسم
-  const reloadRef = useRef(messagesState.reload);
-  useEffect(() => {
-    reloadRef.current = messagesState.reload;
+  const validStories = (localStories || []).filter((s) => {
+    if (!s.created_at) return true;
+    const createdAt = new Date(s.created_at).getTime();
+    const now = new Date().getTime();
+    return now - createdAt < 24 * 60 * 60 * 1000;
   });
 
-  // اشتراك الرسائل والإشارات الصوتية المباشرة عبر Supabase
+  const groupedStories = validStories.reduce((acc, story) => {
+    const ownerId = story.user_id || "unknown";
+    if (!acc[ownerId]) {
+      acc[ownerId] = {
+        userId: ownerId,
+        userName: story.profiles?.full_name || story.title || "لاعب جوك",
+        stories: [],
+      };
+    }
+    acc[ownerId].stories.push(story);
+    return acc;
+  }, {});
+
+  const myStoryGroup = userId && groupedStories[userId] ? groupedStories[userId] : null;
+  const otherStoryGroups = Object.values(groupedStories).filter((g) => g.userId !== userId);
+
+  const handleNextStory = () => {
+    if (!activeStoryGroup) return;
+    if (activeStoryIndex < activeStoryGroup.stories.length - 1) {
+      setActiveStoryIndex((prev) => prev + 1);
+      setStoryProgress(0);
+    } else {
+      setActiveStoryGroup(null);
+      setActiveStoryIndex(0);
+      setStoryProgress(0);
+      setShowViewersModal(false);
+    }
+  };
+
+  const handlePrevStory = () => {
+    if (activeStoryIndex > 0) {
+      setActiveStoryIndex((prev) => prev - 1);
+      setStoryProgress(0);
+    } else {
+      setStoryProgress(0);
+    }
+  };
+
+  // تسجيل المشاهدة واستجلاَب المشاهدين عند التنقل بين القصص
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase || !matchId) return undefined;
+    if (!activeStoryGroup) return;
 
-    // قناة الرسائل المباشرة لجميع التغييرات (إضافة / تعديل)
-    const msgChannel = supabase
-      .channel(`messages:${matchId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "messages" },
-        () => {
-          reloadRef.current?.();
-        }
-      )
-      .subscribe();
+    const currentStory = activeStoryGroup.stories[activeStoryIndex];
+    if (!currentStory?.id) return;
 
-    // قناة الاتصال الصوتي الحقيقي (Signaling)
-    const callChannel = supabase.channel(`call:${matchId}`);
-    callChannelRef.current = callChannel;
-
-    callChannel
-      .on("broadcast", { event: "webrtc-signal" }, async ({ payload }) => {
-        if (!peerConnectionRef.current && payload.type === "offer") {
-          await handleIncomingCall(payload.offer);
-        } else if (peerConnectionRef.current) {
-          if (payload.type === "answer") {
-            await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(payload.answer));
-            setCallStatus("متصل باللاعب الآخر 🎙️");
-          } else if (payload.type === "candidate") {
-            try {
-              await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
-            } catch {}
-          } else if (payload.type === "end-call") {
-            cleanUpCall();
-            toast.info("أغلق الطرف الآخر المكالمة");
-          }
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(msgChannel);
-      supabase.removeChannel(callChannel);
-    };
-  }, [matchId]);
-
-  // إعداد اتصال WebRTC الأصلي
-  const createPeerConnection = () => {
-    const pc = new RTCPeerConnection(ICE_SERVERS);
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate && callChannelRef.current) {
-        callChannelRef.current.send({
-          type: "broadcast",
-          event: "webrtc-signal",
-          payload: { type: "candidate", candidate: event.candidate },
-        });
-      }
-    };
-
-    pc.ontrack = (event) => {
-      if (remoteAudioRef.current && event.streams[0]) {
-        remoteAudioRef.current.srcObject = event.streams[0];
-        remoteAudioRef.current.play().catch(() => {});
-        setCallStatus("المكالمة متصلة - الصوت يعمل 🔊");
-      }
-    };
-
-    peerConnectionRef.current = pc;
-    return pc;
-  };
-
-  // بدء مكالمة مجانية
-  const startVoiceCall = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      localStreamRef.current = stream;
-
-      const pc = createPeerConnection();
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      callChannelRef.current?.send({
-        type: "broadcast",
-        event: "webrtc-signal",
-        payload: { type: "offer", offer },
-      });
-
-      setInCall(true);
-      setCallStatus("جاري الاتصال بالربع...");
-      toast.success("تم إرسال دعوة الاتصال");
-    } catch {
-      toast.error("تعذر الوصول للميكروفون لبدء المكالمة");
-    }
-  };
-
-  // الرد على مكالمة واردة
-  const handleIncomingCall = async (offer) => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      localStreamRef.current = stream;
-
-      const pc = createPeerConnection();
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-
-      callChannelRef.current?.send({
-        type: "broadcast",
-        event: "webrtc-signal",
-        payload: { type: "answer", answer },
-      });
-
-      setInCall(true);
-      setCallStatus("متصل باللاعب الآخر 🎙️");
-      toast.info("تم الاتصال بالمكالمة الصوتية");
-    } catch {
-      toast.error("تعذر فتح الميكروفون للرد");
-    }
-  };
-
-  const cleanUpCall = () => {
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => track.stop());
-      localStreamRef.current = null;
-    }
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
-      peerConnectionRef.current = null;
-    }
-    setInCall(false);
-  };
-
-  const endVoiceCall = () => {
-    callChannelRef.current?.send({
-      type: "broadcast",
-      event: "webrtc-signal",
-      payload: { type: "end-call" },
-    });
-    cleanUpCall();
-    toast.info("تم إنهاء المكالمة");
-  };
-
-  const toggleMute = () => {
-    if (localStreamRef.current) {
-      const audioTrack = localStreamRef.current.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        setIsMuted(!audioTrack.enabled);
+    // 1. إذا كانت القصة لشخص آخر، سجل المشاهدة
+    if (activeStoryGroup.userId !== userId && userId) {
+      if (typeof recordStoryView === "function") {
+        recordStoryView(currentStory.id, userId).catch(() => {});
+      } else if (supabase) {
+        supabase
+          .from("story_views")
+          .upsert(
+            { story_id: currentStory.id, viewer_id: userId, viewed_at: new Date().toISOString() },
+            { onConflict: "story_id,viewer_id" }
+          )
+          .then();
       }
     }
-  };
 
-  // تسجيل البصمات الصوتية
-  const recordAudio = async () => {
-    if (recording && recorderRef.current) {
-      recorderRef.current.stop();
-      return;
-    }
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      toast.error("التسجيل الصوتي غير مدعوم في هذا المتصفح");
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      audioChunksRef.current = [];
-      recorder.ondataavailable = (event) => event.data.size && audioChunksRef.current.push(event.data);
-      recorder.onstop = async () => {
-        stream.getTracks().forEach((track) => track.stop());
-        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
-        const file = new File([blob], `voice-${Date.now()}.webm`, { type: blob.type });
-        setSending(true);
+    // 2. إذا كانت قصتي أنا، جلب قائمة المشاهدين بالبروفايلات
+    if (activeStoryGroup.userId === userId) {
+      setLoadingViewers(true);
+      const loadViewers = async () => {
         try {
-          const attachment = await uploadChatAttachment(file);
-          await sendMessage({ matchId, body: "تسجيل صوتي 🎙️", attachment });
-          toast.success("تم إرسال التسجيل الصوتي");
-          await messagesState.reload();
-        } catch (error) {
-          toast.error(error?.message || "تعذر إرسال التسجيل الصوتي");
+          if (typeof fetchStoryViewers === "function") {
+            const list = await fetchStoryViewers(currentStory.id);
+            setCurrentViewers(list || []);
+          } else if (currentStory.viewers) {
+            setCurrentViewers(currentStory.viewers);
+          } else if (supabase) {
+            const { data } = await supabase
+              .from("story_views")
+              .select("id, viewed_at, profiles:viewer_id(id, full_name, avatar_url, position)")
+              .eq("story_id", currentStory.id);
+            setCurrentViewers(data || []);
+          }
+        } catch {
+          setCurrentViewers(currentStory.viewers || []);
         } finally {
-          setSending(false);
+          setLoadingViewers(false);
         }
       };
-      recorderRef.current = recorder;
-      recorder.start();
-      setRecording(true);
-      recorder.addEventListener("stop", () => {
-        recorderRef.current = null;
-        setRecording(false);
-      }, { once: true });
-    } catch (error) {
-      toast.error(error?.message || "تعذر الوصول إلى الميكروفون");
+      loadViewers();
+    }
+
+    const mediaUrl = currentStory?.media_url || currentStory?.image_url || currentStory?.url;
+    const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
+
+    setStoryProgress(0);
+    if (isVideo || showViewersModal) return; // توقيف مؤقت إذا كانت القائمة مفتوحة
+
+    const DURATION = 5000;
+    const INTERVAL = 50;
+    const step = (INTERVAL / DURATION) * 100;
+
+    const timer = setInterval(() => {
+      setStoryProgress((prev) => {
+        if (prev + step >= 100) {
+          clearInterval(timer);
+          handleNextStory();
+          return 100;
+        }
+        return prev + step;
+      });
+    }, INTERVAL);
+
+    return () => clearInterval(timer);
+  }, [activeStoryGroup, activeStoryIndex, showViewersModal]);
+
+  const handleShareStory = async (story) => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "قصة على جوك",
+          text: `شاهد قصة ${story.title || "لاعب"} على جوك!`,
+          url,
+        });
+      } catch {}
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast.success("تم نسخ رابط القصة");
     }
   };
 
-  const handleAttachment = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setSending(true);
-    try {
-      const attachment = await uploadChatAttachment(file);
-      await sendMessage({ matchId, body: file.name, attachment });
-      toast.success("تم إرسال المرفق");
-      await messagesState.reload();
-    } catch (error) {
-      toast.error(error?.message || "تعذر إرسال المرفق حالياً");
-    } finally {
-      setSending(false);
-      event.target.value = "";
-    }
-  };
+  const handleDeleteCurrentStory = async (story) => {
+    const targetId = story?.id;
 
-  const handleSend = async () => {
-    const body = messageText.trim();
-    if (!body) return;
-    setSending(true);
+    setLocalStories((prev) =>
+      prev.filter((s) => (targetId ? s.id !== targetId : s.user_id !== activeStoryGroup?.userId))
+    );
+    setActiveStoryGroup(null);
+    setActiveStoryIndex(0);
+    setShowViewersModal(false);
+
     try {
-      await sendMessage({ matchId, body });
-      setMessageText("");
-      await messagesState.reload();
+      await deleteStory(targetId);
+      toast.success("تم حذف القصة بنجاح");
+      await dataState.reload();
     } catch (error) {
-      toast.error(error?.message || "حدث خطأ في الإرسال");
-    } finally {
-      setSending(false);
+      console.error(error);
+      toast.error("حدث خطأ أثناء الحذف من قاعدة البيانات");
+      await dataState.reload();
     }
   };
 
   return (
     <PhoneShell withNav>
-      <StatusBar />
-      {/* عنصر تشغيل صوت الطرف الآخر بشكل مخفي */}
-      <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
-
-      {/* الترويسة العلوية */}
-      <div className="flex items-center justify-between border-b border-border px-5 py-3">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => toast.info("دعوة الربع إلى الشات")}
-            aria-label="إضافة لاعب"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-foreground active:scale-95 transition-transform"
-          >
-            <UserPlus className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={startVoiceCall}
-            aria-label="اتصال صوتي"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-primary/10 text-primary active:scale-95 transition-transform"
-          >
-            <Phone className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="text-center">
-          <h2 className="text-base font-extrabold text-foreground">الدردشة</h2>
-          <p className="text-[11px] text-primary font-medium">{matchName}</p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <ThemeToggle className="h-9 w-9" />
-          <button
-            type="button"
-            onClick={() => toast.info(`القناة الحالية: ${matchName}`)}
-            aria-label="معلومات"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-foreground"
-          >
-            <Info className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* ترويسة روبوت الكابتن العلوية - تصميم بيضاوي احترافي */}
-      <div className="px-4 pt-3 pb-1">
-        <div className="relative overflow-hidden rounded-full border border-emerald-500/30 bg-gradient-to-r from-emerald-950/20 via-surface to-emerald-950/20 p-1.5 pr-2 shadow-lg shadow-emerald-500/5 backdrop-blur-xl transition-all hover:border-emerald-500/50">
-          <div className="flex items-center gap-2.5">
-            {/* مجسم الروبوت الكابتن مع مؤشر النشاط المباشر */}
-            <div className="relative shrink-0">
-              <BotCaptainSVG className="h-10 w-10 drop-shadow-[0_0_8px_rgba(16,185,129,0.35)]" />
-              <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-background">
-                <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
-              </span>
-            </div>
-
-            {/* نص المساعد والاختصارات السريعة */}
-            <div className="flex flex-1 items-center justify-between gap-2 overflow-hidden">
-              <div className="min-w-0 flex-1 text-right">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-black text-emerald-500">كابتن جوك</span>
-                  <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.2 text-[9px] font-bold text-emerald-400 border border-emerald-500/20">
-                    مساعد التجميع ⚡
-                  </span>
-                </div>
-                <p className="truncate text-[11px] font-medium text-foreground/90">
-                  جاهز أجمع الربع وأدز فزعة للملعب!
-                </p>
-              </div>
-
-              {/* أزرار الفزعة والتجميع السريعة */}
-              <div className="flex items-center gap-1 shrink-0 pl-1">
-                <button
-                  type="button"
-                  onClick={() => setMessageText("يا ولد ناقصنا لاعبين، فزعة للربع! ⚽")}
-                  className="flex items-center gap-1 rounded-full bg-emerald-500 text-slate-950 px-2.5 py-1 text-[11px] font-extrabold hover:bg-emerald-400 active:scale-95 transition-all shadow-sm"
-                >
-                  <span>فزعة ⚽</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMessageText("منو جاهز ينزل معنا اليوم بالملعب؟ 🔥")}
-                  className="flex items-center gap-1 rounded-full border border-border bg-surface/80 px-2.5 py-1 text-[11px] font-bold text-foreground hover:bg-surface-2 active:scale-95 transition-all"
-                >
-                  <span>تجميع 👥</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* شريط المكالمة الصوتية المباشرة */}
-      {inCall && (
-        <div className="p-4 bg-primary/10 border-b border-primary/20 flex items-center justify-between animate-in slide-in-from-top duration-300">
-          <div className="flex items-center gap-3">
-            <div className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-            </div>
-            <div>
-              <p className="text-xs font-bold text-foreground">مكالمة صوتية حية</p>
-              <p className="text-[10px] text-muted-foreground">{callStatus}</p>
-            </div>
-          </div>
+      <div className="flex flex-1 flex-col overflow-y-auto pb-6 no-scrollbar">
+        {/* الترويسة العلوية */}
+        <div className="flex items-center justify-between px-5 py-3">
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={toggleMute}
-              className={`p-2 rounded-full text-white ${isMuted ? "bg-amber-600" : "bg-slate-700"}`}
-            >
-              {isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-            </button>
-            <button
-              type="button"
-              onClick={endVoiceCall}
-              className="p-2 rounded-full bg-rose-600 text-white"
-            >
-              <PhoneOff className="h-4 w-4" />
-            </button>
+            <ThemeToggle />
+            <NotificationButton
+              count={unreadCount}
+              onClick={() => setNotificationsOpen((open) => !open)}
+            />
           </div>
+          <Logo size="h-9" />
+          <Avatar name={profile?.full_name || ""} size="h-10 w-10" online />
         </div>
-      )}
 
-      {/* قائمة الرسائل */}
-      <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4 no-scrollbar">
-        <RemoteState {...messagesState} empty={!messages.length}>
-          <>
-            {messages.map((message, index) => {
-              // توحيد قراءة الحقول بغض النظر عن مسمى العمود في قاعدة البيانات
-              const textContent = message.text || message.body || message.content;
-              const authorName = message.author || message.sender_id || message.user_id || "لاعب";
-              const mediaUrl = message.attachmentUrl || message.media_url;
-              const mediaType = message.messageType || message.media_type;
-              const formattedTime = message.time || (message.created_at ? new Date(message.created_at).toLocaleTimeString("ar-IQ", { hour: "2-digit", minute: "2-digit" }) : "الآن");
-
-              return (
-                <div
-                  key={message.id || index}
-                  className={`flex items-end gap-2 ${message.mine ? "flex-row" : "flex-row-reverse"}`}
+        {/* شريط القصص (الاستوري) */}
+        <div className="flex gap-4 overflow-x-auto px-5 py-2 no-scrollbar" dir="rtl">
+          {/* قصتك */}
+          <div className="flex flex-col items-center gap-1.5 shrink-0">
+            <div className="relative flex items-center justify-center">
+              {myStoryGroup ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveStoryGroup(myStoryGroup);
+                    setActiveStoryIndex(0);
+                  }}
+                  className="flex h-16 w-16 items-center justify-center rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 shadow-md transition-transform active:scale-95"
                 >
-                  {!message.mine ? <Avatar name={authorName} size="h-8 w-8" /> : null}
-                  <div className={message.mine ? "text-left" : "text-right"}>
-                    {!message.mine ? (
-                      <p className="pb-1 text-[11px] text-muted-foreground">{authorName}</p>
-                    ) : null}
-                    <div
-                      className={`max-w-[15rem] rounded-2xl px-3.5 py-2.5 text-sm ${
-                        message.mine
-                          ? "bg-gradient-primary text-primary-foreground"
-                          : "border border-border bg-surface text-foreground"
-                      }`}
-                    >
-                      {mediaType === "image" && mediaUrl ? (
-                        <img
-                          src={mediaUrl}
-                          alt={message.attachmentName || "مرفق"}
-                          className="mb-2 max-h-48 rounded-xl object-cover"
-                        />
-                      ) : null}
-                      {mediaUrl && mediaType !== "image" ? (
-                        <a
-                          href={mediaUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mb-1 block underline"
-                        >
-                          {message.attachmentName || "فتح المرفق"}
-                        </a>
-                      ) : null}
-                      {textContent ? <span>{textContent}</span> : null}
-                    </div>
-                    <p className="pt-1 text-[10px] text-muted-foreground">{formattedTime}</p>
-                  </div>
+                  <span className="h-full w-full rounded-full border-2 border-background overflow-hidden bg-slate-900 flex items-center justify-center">
+                    {myStoryGroup.stories[0]?.media_url || myStoryGroup.stories[0]?.image_url ? (
+                      <img
+                        src={
+                          myStoryGroup.stories[0]?.media_url ||
+                          myStoryGroup.stories[0]?.image_url
+                        }
+                        alt="قصتك"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <User className="h-6 w-6 text-white" />
+                    )}
+                  </span>
+                </button>
+              ) : (
+                <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-dashed border-primary bg-surface text-primary">
+                  <User className="h-6 w-6 text-muted-foreground" />
                 </div>
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </>
-        </RemoteState>
-      </div>
+              )}
 
-      {/* الملصقات */}
-      {stickersOpen ? (
-        <div className="flex gap-2 border-t border-border px-4 py-2 bg-surface" dir="rtl">
-          {["⚽", "🔥", "👏", "😂", "💪", "🙌", "🚩", "🏆"].map((sticker) => (
-            <button
-              key={sticker}
-              type="button"
-              onClick={() => setMessageText((value) => `${value}${sticker}`)}
-              className="text-lg hover:scale-125 transition-transform"
+              <label className="absolute -bottom-1 -left-1 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-primary text-white shadow-md border-2 border-background transition-transform active:scale-90">
+                {storyUploading ? "..." : <Plus className="h-3.5 w-3.5" />}
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  className="hidden"
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    if (!file) return;
+                    setStoryUploading(true);
+                    try {
+                      await uploadStory(file);
+                      toast.success("تم رفع القصة بنجاح");
+                      await dataState.reload();
+                    } catch (error) {
+                      toast.error(error?.message || "تعذر رفع القصة");
+                    } finally {
+                      setStoryUploading(false);
+                      event.target.value = "";
+                    }
+                  }}
+                />
+              </label>
+            </div>
+            <span className="text-[11px] font-medium text-foreground">قصتك</span>
+          </div>
+
+          {/* قصص الربع واللاعبين */}
+          {otherStoryGroups.map((group) => {
+            const firstStory = group.stories[0];
+            const mediaUrl =
+              firstStory?.media_url || firstStory?.image_url || firstStory?.url;
+            const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
+
+            return (
+              <button
+                key={group.userId}
+                type="button"
+                className="flex flex-col items-center gap-1.5 shrink-0 transition-transform active:scale-95"
+                onClick={() => {
+                  setActiveStoryGroup(group);
+                  setActiveStoryIndex(0);
+                }}
+              >
+                <span className="flex h-16 w-16 items-center justify-center rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 shadow-md">
+                  <span className="h-full w-full rounded-full border-2 border-background overflow-hidden bg-slate-900 flex items-center justify-center">
+                    {isVideo ? (
+                      <video
+                        src={mediaUrl}
+                        className="h-full w-full object-cover pointer-events-none"
+                      />
+                    ) : mediaUrl ? (
+                      <img
+                        src={mediaUrl}
+                        alt="ستوري"
+                        className="h-full w-full object-cover pointer-events-none"
+                      />
+                    ) : (
+                      <User className="h-6 w-6 text-muted-foreground" />
+                    )}
+                  </span>
+                </span>
+                <span className="text-[11px] text-muted-foreground truncate w-16 text-center">
+                  {group.userName}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* حقل البحث */}
+        <div className="px-5 pt-2">
+          <label className="flex items-center gap-2 rounded-2xl border border-border bg-surface px-4 py-3 shadow-sm">
+            <Search className="h-4 w-4 text-muted-foreground" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="ابحث عن ملعب أو منطقة.."
+              className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+          </label>
+        </div>
+
+        {/* أزرار الفلاتر والتصنيفات */}
+        <div className="flex items-center gap-2.5 overflow-x-auto px-5 pt-3 pb-1 no-scrollbar" dir="rtl">
+          {[
+            { id: "nearby", label: "اللعبات القريبة" },
+            { id: "venues", label: "ملاعب" },
+            { id: "active", label: "الربع النشط" },
+          ].map((filter) => (
+            <Chip
+              key={filter.id}
+              active={activeFilter === filter.id}
+              onClick={() => setActiveFilter(filter.id)}
             >
-              {sticker}
-            </button>
+              {filter.label}
+            </Chip>
           ))}
         </div>
-      ) : null}
 
-      {/* شريط الأدوات والإرسال */}
-      <div className="flex items-center gap-2 border-t border-border px-4 py-3 bg-surface">
-        <button
-          type="button"
-          onClick={recordAudio}
-          aria-label="تسجيل صوتي"
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-primary text-primary-foreground ${
-            recording ? "animate-pulse ring-2 ring-rose-500" : ""
-          }`}
-        >
-          <Mic className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setStickersOpen((value) => !value)}
-          aria-label="ملصقات"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-muted-foreground"
-        >
-          <Smile className="h-4 w-4" />
-        </button>
-        <div className="flex flex-1 items-center gap-2 rounded-full border border-border bg-background px-4 py-2.5 shadow-inner">
-          <input
-            value={messageText}
-            onChange={(event) => setMessageText(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") handleSend();
-            }}
-            placeholder="اكتب رسالتك للربع.."
-            className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-          />
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={sending}
-            aria-label="إرسال"
-            className="text-primary disabled:opacity-50"
-          >
-            <Send className="h-4 w-4" />
-          </button>
+        {/* خريطة الملاعب الحية */}
+        <div className="px-5 pt-3">
+          <div className="relative h-80 w-full overflow-hidden rounded-3xl border border-border shadow-sm">
+            <LiveMap
+              venues={rawData.mapPins}
+              onVenueClick={(venue) =>
+                toast.info(venue.address || `تم اختيار ${venue.name}`)
+              }
+              onLocate={(error) => error && toast.info("يرجى السماح بتحديد الموقع")}
+            />
+            <Link
+              to="/fazaa"
+              className="absolute bottom-4 left-4 flex items-center gap-1.5 rounded-full bg-gradient-primary px-4 py-2.5 text-xs font-bold text-primary-foreground shadow-glow transition-transform active:scale-95"
+            >
+              <Zap className="h-4 w-4" />
+              فزعة
+            </Link>
+          </div>
         </div>
-        <input
-          id="chat-attachment"
-          type="file"
-          accept="image/*,.pdf,.doc,.docx,.zip"
-          className="hidden"
-          onChange={handleAttachment}
-        />
-        <button
-          type="button"
-          onClick={() => document.getElementById("chat-attachment")?.click()}
-          aria-label="إرفاق"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-muted-foreground"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
       </div>
+
+      {/* عارض القصة بنمط أنستغرام */}
+      {activeStoryGroup &&
+        (() => {
+          const currentStory = activeStoryGroup.stories[activeStoryIndex];
+          const mediaUrl =
+            currentStory?.media_url || currentStory?.image_url || currentStory?.url;
+          const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
+          const timeAgo = getTimeAgo(currentStory?.created_at);
+          const isMyStory = activeStoryGroup.userId === userId;
+          const viewersCount = currentViewers?.length || currentStory?.views_count || currentStory?.viewers_count || 0;
+
+          return (
+            <div className="fixed inset-0 z-[99999] h-[100dvh] w-full bg-black select-none flex flex-col justify-between overflow-hidden animate-in fade-in duration-200">
+              {/* الترويسة العلوية لعارض الاستوري */}
+              <div className="absolute top-0 inset-x-0 z-30 p-4 pt-6 bg-gradient-to-b from-black/90 via-black/50 to-transparent">
+                <div className="flex gap-1.5 mb-3">
+                  {activeStoryGroup.stories.map((s, idx) => (
+                    <div
+                      key={s.id || idx}
+                      className="h-1 flex-1 rounded-full bg-white/30 overflow-hidden"
+                    >
+                      <div
+                        className="h-full bg-white transition-all duration-75 ease-linear"
+                        style={{
+                          width:
+                            idx === activeStoryIndex
+                              ? `${storyProgress}%`
+                              : idx < activeStoryIndex
+                              ? "100%"
+                              : "0%",
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="h-9 w-9 rounded-full border border-white/50 overflow-hidden bg-slate-800 flex items-center justify-center">
+                      <User className="h-5 w-5 text-white" />
+                    </div>
+                    <div className="flex flex-col text-right">
+                      <span className="text-xs font-bold text-white drop-shadow">
+                        {activeStoryGroup.userName}
+                      </span>
+                      <span className="text-[10px] text-slate-300">{timeAgo}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 z-40">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleShareStory(currentStory);
+                      }}
+                      className="p-2 rounded-full bg-black/40 text-white hover:bg-black/70 transition active:scale-90"
+                      title="مشاركة"
+                    >
+                      <Share2 className="h-4 w-4" />
+                    </button>
+
+                    {isMyStory && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCurrentStory(currentStory);
+                        }}
+                        className="p-2.5 rounded-full bg-rose-600/90 text-white hover:bg-rose-700 transition shadow-lg active:scale-90 flex items-center justify-center"
+                        title="حذف القصة"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveStoryGroup(null);
+                        setActiveStoryIndex(0);
+                        setShowViewersModal(false);
+                      }}
+                      className="p-2 rounded-full bg-black/40 text-white hover:bg-black/70 transition active:scale-90"
+                      title="إغلاق"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* جسم القصة الرئيسي */}
+              <div
+                className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden"
+                onContextMenu={(e) => e.preventDefault()}
+              >
+                {isVideo ? (
+                  <video
+                    src={mediaUrl}
+                    autoPlay
+                    playsInline
+                    onTimeUpdate={(e) => {
+                      const p =
+                        (e.currentTarget.currentTime / e.currentTarget.duration) * 100;
+                      setStoryProgress(p || 0);
+                    }}
+                    onEnded={handleNextStory}
+                    className="w-full h-full object-cover"
+                  />
+                ) : mediaUrl ? (
+                  <img
+                    src={mediaUrl}
+                    alt="قصة"
+                    onDragStart={(e) => e.preventDefault()}
+                    className="w-full h-full object-cover select-none"
+                  />
+                ) : (
+                  <p className="text-sm text-slate-400">الوسائط غير متوفرة</p>
+                )}
+
+                {/* مناطق النقر للتنقل */}
+                <div className="absolute inset-0 flex z-20">
+                  <div
+                    className="w-[35%] h-full cursor-pointer"
+                    onClick={handlePrevStory}
+                  />
+                  <div
+                    className="w-[65%] h-full cursor-pointer"
+                    onClick={handleNextStory}
+                  />
+                </div>
+
+                {/* زر مشاهدين قصتي السفلي (يظهر فقط لقصتك) */}
+                {isMyStory && (
+                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowViewersModal(true);
+                      }}
+                      className="flex items-center gap-2 rounded-full bg-black/60 backdrop-blur-md border border-white/20 px-4 py-2 text-white text-xs font-bold hover:bg-black/80 transition active:scale-95 shadow-xl"
+                    >
+                      <Eye className="h-4 w-4 text-emerald-400" />
+                      <span>{viewersCount} مشاهدة</span>
+                      <ChevronUp className="h-3.5 w-3.5 text-slate-400" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* نافذة المشاهدين السفلية (Bottom Sheet Modal) */}
+              {showViewersModal && (
+                <div
+                  className="fixed inset-0 z-[100000] bg-black/70 backdrop-blur-sm flex flex-col justify-end animate-in fade-in duration-200"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowViewersModal(false);
+                  }}
+                >
+                  <div
+                    className="w-full max-h-[65dvh] bg-surface border-t border-border rounded-t-3xl p-5 flex flex-col gap-4 overflow-hidden animate-in slide-in-from-bottom duration-300"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* ترويسة النافذة */}
+                    <div className="flex items-center justify-between border-b border-border pb-3">
+                      <div className="flex items-center gap-2">
+                        <Eye className="h-5 w-5 text-emerald-500" />
+                        <h3 className="text-sm font-bold text-foreground">
+                          المشاهدات ({viewersCount})
+                        </h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowViewersModal(false)}
+                        className="p-1 rounded-full bg-surface-2 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    {/* قائمة بروفايلات المشاهدين */}
+                    <div className="flex-1 overflow-y-auto space-y-3 no-scrollbar" dir="rtl">
+                      {loadingViewers ? (
+                        <p className="text-center text-xs text-muted-foreground py-6">
+                          جاري تحميل المشاهدين...
+                        </p>
+                      ) : currentViewers.length > 0 ? (
+                        currentViewers.map((item, idx) => {
+                          const viewerProfile = item.profiles || item.user || item;
+                          const name = viewerProfile.full_name || viewerProfile.name || "لاعب جوك";
+                          const position = viewerProfile.position || "لاعب";
+                          const viewedAt = getTimeAgo(item.viewed_at || item.created_at);
+
+                          return (
+                            <Link
+                              key={item.id || idx}
+                              to={viewerProfile.id ? `/player/${viewerProfile.id}` : "#"}
+                              className="flex items-center justify-between p-2.5 rounded-2xl bg-surface-2/60 hover:bg-surface-2 transition"
+                              onClick={() => setShowViewersModal(false)}
+                            >
+                              <div className="flex items-center gap-3">
+                                <Avatar
+                                  name={name}
+                                  src={viewerProfile.avatar_url}
+                                  size="h-10 w-10"
+                                />
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-bold text-foreground">
+                                    {name}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {position}
+                                  </span>
+                                </div>
+                              </div>
+                              <span className="text-[10px] text-muted-foreground font-medium">
+                                {viewedAt}
+                              </span>
+                            </Link>
+                          );
+                        })
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground text-xs">
+                          <Eye className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                          لا توجد مشاهدات حتى الآن
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
     </PhoneShell>
   );
 }
