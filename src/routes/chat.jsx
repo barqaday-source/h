@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Bot, Info, Mic, MicOff, Phone, PhoneOff, Plus, Send, Smile, UserPlus } from "lucide-react";
+import { Info, Mic, MicOff, Phone, PhoneOff, Plus, Send, Smile, UserPlus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Avatar, PhoneShell, StatusBar, ThemeToggle } from "@/components/ui-kit";
@@ -21,6 +21,38 @@ export const Route = createFileRoute("/chat")({
 const ICE_SERVERS = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 };
+
+// أيقونة روبوت الكابتن بصيغة SVG تفاعلية
+function BotCaptainSVG({ className = "h-10 w-10" }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" className={className}>
+      <defs>
+        <linearGradient id="capGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#10B981" />
+          <stop offset="100%" stopColor="#059669" />
+        </linearGradient>
+      </defs>
+      <circle cx="100" cy="100" r="90" fill="#0F172A" />
+      {/* Antenna/Ball Light */}
+      <line x1="100" y1="20" x2="100" y2="40" stroke="#F59E0B" strokeWidth="4" />
+      <circle cx="100" cy="20" r="8" fill="#F59E0B" />
+      {/* Head */}
+      <rect x="40" y="40" width="120" height="110" rx="40" fill="url(#capGrad)" />
+      {/* Visor */}
+      <rect x="55" y="65" width="90" height="52" rx="22" fill="#1E293B" stroke="#34D399" strokeWidth="2" />
+      {/* Glowing Eyes */}
+      <circle cx="80" cy="90" r="9" fill="#34D399" />
+      <circle cx="120" cy="90" r="9" fill="#34D399" />
+      <circle cx="82" cy="87" r="3" fill="#FFFFFF" />
+      <circle cx="122" cy="87" r="3" fill="#FFFFFF" />
+      {/* Headphones */}
+      <rect x="26" y="75" width="14" height="34" rx="7" fill="#F59E0B" />
+      <rect x="160" y="75" width="14" height="34" rx="7" fill="#F59E0B" />
+      {/* Smile */}
+      <path d="M 88 128 Q 100 138 112 128" stroke="#FFFFFF" strokeWidth="3" fill="none" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 function ChatScreen() {
   const [matchId, setMatchId] = useState("general");
@@ -357,6 +389,54 @@ function ChatScreen() {
         </div>
       </div>
 
+      {/* ترويسة روبوت الكابتن العلوية - تصميم بيضاوي احترافي */}
+      <div className="px-4 pt-3 pb-1">
+        <div className="relative overflow-hidden rounded-full border border-emerald-500/30 bg-gradient-to-r from-emerald-950/20 via-surface to-emerald-950/20 p-1.5 pr-2 shadow-lg shadow-emerald-500/5 backdrop-blur-xl transition-all hover:border-emerald-500/50">
+          <div className="flex items-center gap-2.5">
+            {/* مجسم الروبوت الكابتن مع مؤشر النشاط المباشر */}
+            <div className="relative shrink-0">
+              <BotCaptainSVG className="h-10 w-10 drop-shadow-[0_0_8px_rgba(16,185,129,0.35)]" />
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-background">
+                <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+              </span>
+            </div>
+
+            {/* نص المساعد والاختصارات السريعة */}
+            <div className="flex flex-1 items-center justify-between gap-2 overflow-hidden">
+              <div className="min-w-0 flex-1 text-right">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-black text-emerald-500">كابتن جوك</span>
+                  <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.2 text-[9px] font-bold text-emerald-400 border border-emerald-500/20">
+                    مساعد التجميع ⚡
+                  </span>
+                </div>
+                <p className="truncate text-[11px] font-medium text-foreground/90">
+                  جاهز أجمع الربع وأدز فزعة للملعب!
+                </p>
+              </div>
+
+              {/* أزرار الفزعة والتجميع السريعة */}
+              <div className="flex items-center gap-1 shrink-0 pl-1">
+                <button
+                  type="button"
+                  onClick={() => setMessageText("يا ولد ناقصنا لاعبين، فزعة للربع! ⚽")}
+                  className="flex items-center gap-1 rounded-full bg-emerald-500 text-slate-950 px-2.5 py-1 text-[11px] font-extrabold hover:bg-emerald-400 active:scale-95 transition-all shadow-sm"
+                >
+                  <span>فزعة ⚽</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMessageText("منو جاهز ينزل معنا اليوم بالملعب؟ 🔥")}
+                  className="flex items-center gap-1 rounded-full border border-border bg-surface/80 px-2.5 py-1 text-[11px] font-bold text-foreground hover:bg-surface-2 active:scale-95 transition-all"
+                >
+                  <span>تجميع 👥</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* شريط المكالمة الصوتية المباشرة */}
       {inCall && (
         <div className="p-4 bg-primary/10 border-b border-primary/20 flex items-center justify-between animate-in slide-in-from-top duration-300">
@@ -445,28 +525,6 @@ function ChatScreen() {
             <div ref={messagesEndRef} />
           </>
         </RemoteState>
-
-        {/* مساعد جوك */}
-        <div className="rounded-2xl border border-primary/20 bg-primary/5 p-3.5 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div className="p-2 rounded-xl bg-primary/10 text-primary">
-              <Bot className="h-5 w-5" />
-            </div>
-            <div className="text-right flex-1">
-              <p className="text-xs font-bold text-foreground">مساعد جوك لتنسيق اللعبة</p>
-              <p className="pt-1 text-[11px] leading-relaxed text-muted-foreground">
-                تحتاج كمل عدد اللاعبين أو تستفسر عن قوانين الحجز والملاعب؟ أنا بضهرك.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setMessageText("يا بوت كملنا العدد ناقصنا لاعبين")}
-            className="mt-2.5 w-full rounded-xl bg-surface border border-border py-2 text-xs font-semibold text-foreground hover:bg-surface-2 transition-colors"
-          >
-            طلب فزعة لاعبين ⚽
-          </button>
-        </div>
       </div>
 
       {/* الملصقات */}
