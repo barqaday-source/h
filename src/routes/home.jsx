@@ -185,10 +185,9 @@ function HomeScreen() {
 
   return (
     <PhoneShell withNav>
-      {/* حاوية تمرير عمودية مرنة تمنع التداخل وضغط العناصر */}
-      <div className="flex flex-1 flex-col overflow-y-auto space-y-2 pb-8 no-scrollbar">
+      <div className="flex flex-1 flex-col overflow-y-auto pb-6 no-scrollbar">
         {/* الترويسة العلوية */}
-        <div className="mb-1 flex items-center justify-between px-5 py-4">
+        <div className="flex items-center justify-between px-5 py-3">
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <NotificationButton
@@ -201,7 +200,7 @@ function HomeScreen() {
         </div>
 
         {/* شريط القصص (الاستوري) */}
-        <div className="mb-1 flex gap-4 overflow-x-auto px-5 py-3 no-scrollbar" dir="rtl">
+        <div className="flex gap-4 overflow-x-auto px-5 py-2 no-scrollbar" dir="rtl">
           {/* قصتك */}
           <div className="flex flex-col items-center gap-1.5 shrink-0">
             <div className="relative flex items-center justify-center">
@@ -306,7 +305,7 @@ function HomeScreen() {
         </div>
 
         {/* حقل البحث */}
-        <div className="px-5 pt-4">
+        <div className="px-5 pt-2">
           <label className="flex items-center gap-2 rounded-2xl border border-border bg-surface px-4 py-3 shadow-sm">
             <Search className="h-4 w-4 text-muted-foreground" />
             <input
@@ -318,27 +317,26 @@ function HomeScreen() {
           </label>
         </div>
 
-        {/* أزرار الفلاتر والتصنيفات */}
-        <div className="flex min-h-12 gap-3 overflow-x-auto px-5 pt-2 pb-3 no-scrollbar" dir="rtl">
+        {/* أزرار الفلاتر والتصنيفات الشفافة والتطابق */}
+        <div className="flex items-center gap-2.5 overflow-x-auto px-5 pt-3 pb-1 no-scrollbar" dir="rtl">
           {[
             { id: "nearby", label: "اللعبات القريبة" },
             { id: "venues", label: "ملاعب" },
             { id: "active", label: "الربع النشط" },
           ].map((filter) => (
-            <button
+            <Chip
               key={filter.id}
-              type="button"
+              active={activeFilter === filter.id}
               onClick={() => setActiveFilter(filter.id)}
-              className="flex min-h-11 shrink-0 items-center"
             >
-              <Chip active={activeFilter === filter.id}>{filter.label}</Chip>
-            </button>
+              {filter.label}
+            </Chip>
           ))}
         </div>
 
         {/* خريطة الملاعب الحية */}
-        <section className="px-5 pt-2 pb-5">
-          <div className="relative isolate h-[22rem] w-full overflow-hidden rounded-3xl border border-border bg-card shadow-card">
+        <div className="px-5 pt-3">
+          <div className="relative h-80 w-full overflow-hidden rounded-3xl border border-border shadow-sm">
             <LiveMap
               venues={rawData.mapPins}
               onVenueClick={(venue) =>
@@ -354,7 +352,7 @@ function HomeScreen() {
               فزعة
             </Link>
           </div>
-        </section>
+        </div>
       </div>
 
       {/* عارض القصة بنمط أنستغرام */}
@@ -488,5 +486,4 @@ function HomeScreen() {
         })()}
     </PhoneShell>
   );
-}
 }
