@@ -23,7 +23,7 @@ const ICE_SERVERS = {
 };
 
 // أيقونة روبوت الكابتن بصيغة SVG تفاعلية
-function BotCaptainSVG({ className = "h-10 w-10" }: { className?: string }) {
+function BotCaptainSVG({ className = "h-10 w-10" }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" className={className}>
       <defs>
