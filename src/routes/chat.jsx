@@ -123,48 +123,53 @@ function ChatScreen() {
   return (
     <PhoneShell withNav>
       <StatusBar />
-      {/* الهيدر - الروبوت الجديد + عنوان فقط */}
-      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
-        <ThemeToggle className="h-9 w-9" />
-        <div className="flex flex-col items-center">
-          <FazaaRobotNew size={52} />
-          <h1 className="mt-1 text- font-extrabold tracking-wide text-slate-900 dark:text-white">فزعة</h1>
+      {/* هيدر متوازن: أدوات جانبية وروبوت مركزي */}
+      <header dir="rtl" className="relative flex min-h-[92px] items-center justify-between border-b border-slate-100 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <ThemeToggle className="h-10 w-10 rounded-full border border-slate-200 bg-slate-50 shadow-sm dark:border-slate-700 dark:bg-slate-800" />
+        <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-blue-50 shadow-sm dark:bg-blue-950/40">
+            <FazaaRobotNew size={44} />
+          </div>
+          <h1 className="mt-1 text-base font-extrabold tracking-wide text-slate-900 dark:text-white">فزعة</h1>
+          <span className="text-[10px] font-medium text-emerald-600">دردشة الربع</span>
         </div>
-        <button className="h-9 w-9 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-600 flex items-center justify-center"><Phone className="h-4 w-4" /></button>
-      </div>
+        <button aria-label="اتصال" className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 shadow-sm transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+          <Phone className="h-4 w-4" />
+        </button>
+      </header>
 
       {messageText.length === 0 && (
-        <div className="bg-white dark:bg-slate-900 border-b border-slate-50 dark:border-slate-800 px-3 py-2.5">
+        <div dir="rtl" className="border-b border-slate-100 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex gap-2 overflow-x-auto no-scrollbar justify-center">
             {quickActions.map((c)=>(
-              <button key={c.label} onClick={()=>setMessageText(c.full)} className="shrink-0 w-fit inline-block rounded-full px-4 py-2 text- font-bold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 transition-all">
-                <span className="mr-1">{c.icon}</span>{c.label}
+              <button key={c.label} onClick={()=>setMessageText(c.full)} className="inline-flex w-fit shrink-0 items-center whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-700 transition-all hover:border-emerald-500 hover:bg-emerald-500 hover:text-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                <span className="ml-1.5">{c.icon}</span>{c.label}
               </button>
             ))}
           </div>
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 bg-[#f8fafc] dark:bg-[#0b1215] space-y-3">
+      <div dir="rtl" className="flex-1 space-y-3 overflow-y-auto bg-[#f8fafc] px-4 py-4 dark:bg-[#0b1215]">
         <RemoteState {...messagesState} empty={!messages.length}>
           <>
             {messages.map((m,i)=>{
               const isMine = m.mine;
               return (
                 <div key={m.id||i} className={`group flex flex-col ${isMine?"items-end":"items-start"}`}>
-                  <div className={`flex gap-2 items-end ${isMine?"flex-row":"flex-row-reverse"}`}>
-                    {!isMine && <Avatar name={m.author||"لاعب"} size="h-7 w-7" />}
+                  <div className={`flex max-w-full items-end gap-2 ${isMine?"flex-row":"flex-row-reverse"}`}>
+                    {!isMine && <Avatar name={m.author||"لاعب"} size="h-8 w-8" />}
                     <div
-                      className={`relative w-fit max-w-[72%] inline-block rounded- px-5 py-3.5 text- shadow-[0_2px_8px_rgba(0,0,0,0.06)] leading-relaxed whitespace-pre-wrap break-words ${isMine?"rounded-br- bg-emerald-500 text-white":"rounded-bl- bg-white dark:bg-slate-800 border border-slate-100 text-slate-800"}`}
+                      className={`relative inline-block w-fit max-w-[78%] rounded-[20px] px-4 py-3 text-sm leading-relaxed shadow-[0_2px_8px_rgba(0,0,0,0.06)] whitespace-pre-wrap break-words ${isMine?"rounded-br-[6px] bg-emerald-500 text-white":"rounded-bl-[6px] border border-slate-100 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"}`}
                       style={{ overflowWrap: 'anywhere' }}
                     >
-                      {m.attachmentUrl && m.messageType==="image" && <img src={m.attachmentUrl} className="mb-2.5 rounded- max-h-60 w-fit" alt="" />}
-                      {m.attachmentUrl && m.messageType==="audio" && <audio controls src={m.attachmentUrl} className="mb-1 w- rounded-full" />}
+                      {m.attachmentUrl && m.messageType==="image" && <img src={m.attachmentUrl} className="mb-2.5 max-h-60 w-fit rounded-[14px] object-cover" alt="" />}
+                      {m.attachmentUrl && m.messageType==="audio" && <audio controls src={m.attachmentUrl} className="mb-1 w-full rounded-full" />}
                       <span>{m.text||m.body}</span>
-                      {isMine && <button onClick={()=>handleDelete(m.id)} className="absolute -left-9 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 bg-white rounded-full p-2 shadow-md"><Trash2 className="h-3.5 w-3.5 text-red-500" /></button>}
+                      {isMine && <button aria-label="حذف الرسالة" onClick={()=>handleDelete(m.id)} className="absolute -left-10 top-1/2 -translate-y-1/2 rounded-full bg-white p-2 opacity-0 shadow-md transition-opacity group-hover:opacity-100"><Trash2 className="h-3.5 w-3.5 text-red-500" /></button>}
                     </div>
                   </div>
-                  <span className={`pt-1.5 text- text-slate-400 ${isMine?"pr-2":"pl-10"}`}>{formatTime(m.created_at)}</span>
+                  <span className={`pt-1.5 text-[11px] text-slate-400 ${isMine?"pr-2":"pl-10"}`}>{formatTime(m.created_at)}</span>
                 </div>
               );
             })}
@@ -173,13 +178,13 @@ function ChatScreen() {
         </RemoteState>
       </div>
 
-      <div className="border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5 flex items-center gap-2">
-        <div className="flex flex-1 items-center gap-2 rounded-full bg-[#f1f5f9] dark:bg-slate-800 border border-slate-100 px-5 py-3 focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100">
-          <input value={messageText} onChange={e=>setMessageText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSend()} placeholder="اكتب رسالتك للربع.." className="w-full bg-transparent text- outline-none" />
-          <button onClick={handleSend} disabled={sending ||!messageText.trim()} className="text-emerald-600 disabled:opacity-30"><Send className="h-5 w-5" /></button>
+      <div dir="rtl" className="flex items-center gap-2 border-t border-slate-100 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex min-h-[46px] flex-1 items-center gap-2 rounded-full border border-slate-100 bg-[#f1f5f9] px-4 py-2.5 transition-all focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100 dark:border-slate-700 dark:bg-slate-800">
+          <input value={messageText} onChange={e=>setMessageText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSend()} placeholder="اكتب رسالتك للربع.." className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400 dark:text-white" />
+          <button aria-label="إرسال الرسالة" onClick={handleSend} disabled={sending ||!messageText.trim()} className="text-emerald-600 transition-opacity disabled:opacity-30"><Send className="h-5 w-5" /></button>
         </div>
         <input id="att" type="file" className="hidden" onChange={handleAttachment} />
-        <button onClick={()=>document.getElementById("att")?.click()} className="h-11 w-11 rounded-full bg-emerald-500 text-white flex items-center justify-center"><Plus className="h-5 w-5" /></button>
+        <button aria-label="إضافة مرفق" onClick={()=>document.getElementById("att")?.click()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm transition-colors hover:bg-emerald-600"><Plus className="h-5 w-5" /></button>
       </div>
     </PhoneShell>
   );
