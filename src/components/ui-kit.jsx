@@ -35,12 +35,12 @@ export function ThemeToggle({ className = "" }) {
   );
 }
 
-/** مكون الشعار المتجهي الاصلي عالي الجودة لتطبيق جوّك */
-export function Logo({ size = "h-12", className = "" }) {
+/** مكون الشعار المتجهي الشفاف الموحد لتطبيق جوّك */
+export function Logo({ size = "h-12", showSlogan = true, className = "" }) {
   return (
     <div className={`inline-flex items-center justify-center select-none ${className}`}>
       <svg
-        viewBox="0 0 400 160"
+        viewBox="0 0 400 140"
         role="img"
         aria-label="جوك | جمع ربعك وعيش جوك"
         preserveAspectRatio="xMidYMid meet"
@@ -48,6 +48,11 @@ export function Logo({ size = "h-12", className = "" }) {
         xmlns="http://www.w3.org/2000/svg"
       >
         <defs>
+          <style>{`
+            @import url('https://fonts.googleapis.com/css2?family=Lalezar&display=swap');
+            .jawk-title { font-family: 'Lalezar', cursive, sans-serif; font-size: 72px; font-weight: 700; }
+            .jawk-sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
+          `}</style>
           <linearGradient id="jawkLogoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#34d399" />
             <stop offset="100%" stopColor="#059669" />
@@ -56,32 +61,29 @@ export function Logo({ size = "h-12", className = "" }) {
             <feGaussianBlur stdDeviation="12" />
           </filter>
         </defs>
-        <rect width="400" height="160" rx="16" fill="#0f172a" />
-        <circle cx="200" cy="70" r="60" fill="#10b981" opacity="0.1" filter="url(#jawkLogoGlow)" />
+
+        <circle cx="200" cy="60" r="55" fill="#10b981" opacity="0.12" filter="url(#jawkLogoGlow)" />
         <text
           x="200"
-          y="88"
+          y="78"
           textAnchor="middle"
           direction="rtl"
           fill="url(#jawkLogoGradient)"
-          fontFamily="Lalezar, Tajawal, Cairo, Arial, sans-serif"
-          fontSize="72"
-          fontWeight="700"
+          className="jawk-title"
         >
           جَوَّك
         </text>
-        <text
-          x="200"
-          y="130"
-          textAnchor="middle"
-          fill="#a1a1aa"
-          fontFamily="system-ui, sans-serif"
-          fontSize="13"
-          fontWeight="600"
-          letterSpacing="0.5"
-        >
-          جَمّع رَبْعَك وَعِيش جَوَّك
-        </text>
+        {showSlogan && (
+          <text
+            x="200"
+            y="120"
+            textAnchor="middle"
+            fill="#a1a1aa"
+            className="jawk-sub"
+          >
+            جَمّع رَبْعَك وَعِيش جَوَّك
+          </text>
+        )}
       </svg>
     </div>
   );
