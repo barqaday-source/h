@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Send, Trash2, Sparkles, Bot, User } from "lucide-react";
+import { Send, Trash2, Sparkles, Bot, User, Zap } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PhoneShell, StatusBar, ThemeToggle } from "@/components/ui-kit";
@@ -49,17 +49,16 @@ function ChatScreen() {
     return () => supabase.removeChannel(ch);
   }, []);
 
-  const handleSend = async () => {
-    const body = messageText.trim(); 
+  const handleSend = async (textToSend) => {
+    const body = (textToSend || messageText).trim(); 
     if (!body) return;
     setSending(true);
     try { 
-      // إرسال رسالتك للبوت
       await sendMessage({ matchId: FAZAA_PRIVATE_MATCH_ID, body }); 
       setMessageText(""); 
       await messagesState.reload(); 
 
-      // رد تجريبي فوري من فزعة (حتى نضبط المنطق لاحقاً)
+      // رد تجريبي فوري من فزعة
       setTimeout(async () => {
         await sendMessage({ 
           matchId: FAZAA_PRIVATE_MATCH_ID, 
@@ -87,11 +86,18 @@ function ChatScreen() {
     }
   };
 
+  // قائمة الاقتراحات السريعة الظاهرة فوق شريط الإرسال
+  const quickSuggestions = [
+    "كفل لي لعبة 5×5 الليلة بمنطقتي",
+    "منو أنشط لاعبين قربي الآن؟",
+    "اقترح لي 3 مناطق مناسبة للحجز"
+  ];
+
   return (
     <PhoneShell withNav>
       <StatusBar />
       
-      {/* --- الهيدر (شراكة وتصميم مطابق لشاشتنا تماماً) --- */}
+      {/* --- الهيدر بتصميم سيساف المتناسق --- */}
       <header dir="rtl" className="flex items-center justify-between border-b border-[#0d3b2c] bg-[#041c14] px-4 py-3 shadow-md">
         <ThemeToggle className="h-9 w-9 rounded-full border border-[#0d3b2c] bg-[#072c20] text-emerald-400" />
         
@@ -101,16 +107,16 @@ function ChatScreen() {
           </div>
           <div className="flex flex-col text-right">
             <h1 className="text-sm font-bold tracking-wide text-white flex items-center gap-1">
-              فزعة <Sparkles className="h-3 w-3 text-emerald-400" />
+              شات فزعة <Sparkles className="h-3 w-3 text-emerald-400" />
             </h1>
-            <span className="text-[10px] text-emerald-400 font-medium">متصل الآن • محادثة مشفرة</span>
+            <span className="text-[10px] text-emerald-400 font-medium">محادثة خاصة بينك وبين البوت</span>
           </div>
         </div>
 
-        <div className="w-9" /> {/* توازن الهيدر */}
+        <div className="w-9" /> 
       </header>
 
-      {/* --- منطقة الدردشة (خلفية خضراء داكنة فخمة #041c14) --- */}
+      {/* --- منطقة الدردشة --- */}
       <div dir="rtl" className="flex-1 space-y-3.5 overflow-y-auto bg-[#041c14] p-4 font-sans text-white">
         <RemoteState {...messagesState} empty={!messages.length}>
           <>
@@ -121,7 +127,7 @@ function ChatScreen() {
                   🤖
                 </div>
                 <div className="rounded-2xl rounded-bl-sm border border-emerald-500/30 bg-[#072c20] px-4 py-3 text-xs leading-relaxed text-emerald-100 shadow-md">
-                  أهلاً بك يا بارق في محادثتك الخاصة مع <b>فزعة</b>. اطلب مني أي شيء يخص البحث، التجميع، أو تجهيز التطبيق وسأقوم به فورا! ⚡
+                  هلا بيك 👋 آني شات فزعة. أكفل ربعك بسرعة: أجمع المنشطين بمنطقتك، أرتب اللعبة وأقترح الملعب والوقت. شتحب نسوي؟
                 </div>
               </div>
               <span className="pl-9 pt-1 text-[10px] text-emerald-500/70">الآن</span>
@@ -164,18 +170,36 @@ function ChatScreen() {
         </RemoteState>
       </div>
 
-      {/* --- شريط الإرسال السفلي (نص فقط، سريع ونظيف) --- */}
-      <div dir="rtl" className="flex items-center gap-2 border-t border-[#0d3b2c] bg-[#041c14] p-3">
-        <input 
-          value={messageText} 
-          onChange={e => setMessageText(e.target.value)} 
-          onKeyDown={e => e.key === "Enter" && handleSend()} 
-          placeholder="اكتب رسالتك إلى فزعة..." 
-          className="flex-1 rounded-xl border border-[#0d3b2c] bg-[#072c20] px-4 py-3 text-xs text-white outline-none placeholder:text-emerald-500/50 focus:border-emerald-500" 
-        />
+      {/* --- شريط الاقتراحات السريعة (من التصميم الجديد) --- */}
+      <div dir="rtl" className="bg-[#041c14] px-3 pt-2 pb-1 border-t border-[#0d3b2c]/40 flex gap-2 overflow-x-auto no-scrollbar">
+        {quickSuggestions.map((suggestion, idx) => (
+          <button
+            key={idx}
+            onClick={() => handleSend(suggestion)}
+            className="shrink-0 rounded-full border border-emerald-500/30 bg-[#072c20] px-3 py-1.5 text-[11px] text-emerald-200 hover:bg-emerald-900/50 transition-colors"
+          >
+            {suggestion}
+          </button>
+        ))}
+      </div>
+
+      {/* --- شريط الإرسال السفلي --- */}
+      <div dir="rtl" className="flex items-center gap-2 bg-[#041c14] p-3">
+        <div className="relative flex-1 flex items-center">
+          <span className="absolute right-3 text-emerald-400/70">
+            <Zap className="h-4 w-4" />
+          </span>
+          <input 
+            value={messageText} 
+            onChange={e => setMessageText(e.target.value)} 
+            onKeyDown={e => e.key === "Enter" && handleSend()} 
+            placeholder="اكتب: كفل لي لعبة الليلة..." 
+            className="w-full rounded-xl border border-[#0d3b2c] bg-[#072c20] pr-9 pl-4 py-3 text-xs text-white outline-none placeholder:text-emerald-500/50 focus:border-emerald-500" 
+          />
+        </div>
         <button 
           aria-label="إرسال الرسالة" 
-          onClick={handleSend} 
+          onClick={() => handleSend()} 
           disabled={sending || !messageText.trim()} 
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-[#032015] transition-transform active:scale-95 disabled:opacity-30 cursor-pointer shadow-md"
         >
