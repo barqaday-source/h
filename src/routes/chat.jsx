@@ -36,6 +36,7 @@ function playChatSound(type) {
     oscillator.addEventListener("ended", () => context.close());
   } catch {}
 }
+
 function playRobotTone(type) {
   if (typeof window === "undefined") return;
   try {
@@ -55,9 +56,8 @@ function playRobotTone(type) {
   } catch {}
 }
 
-// --- مكون روبوت "فزعة" الجديد للهيدر ---
+// --- مكون روبوت "فزعة" للهيدر ---
 function FazaaRobotHeader({ size = 52, gaze, mood = "idle", onClick }) {
-  // تأثير النظر والحركة مع الماوس
   const lookX = Math.max(-3, Math.min(3, gaze.x * 0.08));
   const lookY = Math.max(-2, Math.min(2, gaze.y * 0.06));
   return (
@@ -69,7 +69,6 @@ function FazaaRobotHeader({ size = 52, gaze, mood = "idle", onClick }) {
       tabIndex={0}
       onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onClick?.(); }}
     >
-      {/* تأكد من وجود مسار الصورة الصحيح في مشروعك */}
       <img src="/assets/fazaa-robot-transparent.png" alt="فزعة" className="h-full w-full object-cover" style={{ transform: `translate(${lookX}px, ${lookY}px) scale(1.1)` }} />
       {mood === "blink" && <>
         <span aria-hidden="true" className="pointer-events-none absolute rounded-full bg-[#20272b]" style={{ width: size * 0.22, height: size * 0.035, left: size * 0.29, top: size * 0.49, transform: "rotate(8deg)" }} />
@@ -96,14 +95,12 @@ function ChatScreen() {
   const [robotMood, setRobotMood] = useState("idle");
   const [fazaaMenuOpen, setFazaaMenuOpen] = useState(false);
 
-  // --- تأثير تتبع حركة المؤشر ---
   useEffect(() => {
     const handlePointerMove = (event) => { setGaze({ x: event.clientX - window.innerWidth / 2, y: event.clientY - 92 }); };
     window.addEventListener("pointermove", handlePointerMove, { passive: true });
     return () => window.removeEventListener("pointermove", handlePointerMove);
   }, []);
 
-  // --- التعامل مع ضغطة الروبوت ---
   const handleRobotClick = () => {
     playRobotTone("click");
     setRobotMood("happy");
@@ -112,7 +109,6 @@ function ChatScreen() {
     window.setTimeout(() => setRobotMood("idle"), 820);
   };
 
-  // --- تنفيذ أوامر فزعة ---
   const handleFazaaAction = async (type) => {
     if (!userId || userId === 'undefined') { toast.error("جاري تحميل الجلسة"); return; }
     setFazaaMenuOpen(false);
@@ -131,7 +127,6 @@ function ChatScreen() {
     finally { setTimeout(() => setRobotMood("idle"), 1500); }
   };
 
-  // --- أزرار الاقتراحات السريعة ---
   const quickActions = [
     { icon: "⚽", label: "فزعة", action: () => handleFazaaAction('quick'), full: "يا ولد ناقصنا لاعبين، فزعة للربع! ⚽" },
     { icon: "👥", label: "تجميعة", action: () => setMessageText("منو جاهز ينزل معنا اليوم بالملعب؟ 🔥"), full: "منو جاهز ينزل معنا اليوم بالملعب؟ 🔥" },
@@ -139,14 +134,12 @@ function ChatScreen() {
     { icon: "📍", label: "المكان", action: () => setMessageText("وين اللعبة؟ دزوا لوكيشن 📍"), full: "وين اللعبة؟ دزوا لوكيشن 📍" },
   ];
 
-  // --- جلب الرسائل من Supabase ---
   const messagesState = useRemoteData(() => {
     if (!matchId || matchId === 'undefined') return Promise.resolve([]);
     return fetchMessages(matchId);
   }, [matchId]);
   const messages = messagesState.data ?? [];
 
-  // --- تهيئة الجلسة والمستمعين ---
   useEffect(() => {
     supabase?.auth.getSession().then(({ data }) => { const id = data?.session?.user?.id; if (id && id !== 'undefined') setUserId(id); });
     fetchCurrentMatchId().then(id => { if (id && id !== 'undefined') setMatchId(id); }).catch(() => {});
@@ -161,7 +154,6 @@ function ChatScreen() {
     return () => supabase.removeChannel(ch);
   }, [matchId]);
 
-  // --- دوال إرسال وحذف الرسائل ---
   const handleSend = async () => {
     const body = messageText.trim(); if (!body) return;
     if (!userId || userId === 'undefined') { toast.error("جاري تحميل الجلسة"); return; }
@@ -184,12 +176,10 @@ function ChatScreen() {
     <PhoneShell withNav>
       <StatusBar />
       
-      {/* --- الهيدر الاحترافي الجديد بهوية خضراء وفزعة --- */}
+      {/* --- الهيدر الاحترافي --- */}
       <header dir="rtl" className="relative flex min-h-[60px] items-center justify-between border-b border-emerald-100 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        {/* زر تبديل الوضع (نهاري/ليلي) */}
         <ThemeToggle className="h-10 w-10 rounded-full border border-slate-200 bg-slate-50 shadow-sm dark:border-slate-700 dark:bg-slate-800" />
         
-        {/* فزعة في المنتصف */}
         <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center">
           <div className="flex h-14 w-14 items-center justify-center">
             <FazaaRobotHeader size={54} gaze={gaze} mood={robotMood} onClick={handleRobotClick} />
@@ -198,7 +188,7 @@ function ChatScreen() {
           <span className="text-[11px] font-medium text-[#39ff88]">دردشة الربع</span>
         </div>
 
-        {/* زر تفاصيل المباراة السريع (بدل زر الاتصال) */}
+        {/* زر تفاصيل المباراة */}
         <button 
           onClick={() => toast.info("قريباً: عرض تفاصيل الحجز وملعب المباراة!")}
           aria-label="تفاصيل المباراة" 
@@ -209,10 +199,85 @@ function ChatScreen() {
         </button>
       </header>
 
-      {/* --- قائمة أوامر فزعة التفاعلية (Glassmorphism) --- */}
+      {/* --- قائمة أوامر فزعة التفاعلية --- */}
       {fazaaMenuOpen && (
         <div dir="rtl" className="animate-in slide-in-from-top-2 border-b border-emerald-100 bg-white px-3 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)] dark:border-slate-800 dark:bg-slate-900">
-          <p className="pb-2 text-center text- font-bold text-slate-500">⚡ شبيك لبيك، فزعة بين إيديك:</p>
+          <p className="pb-2 text-center text-xs font-bold text-slate-500">⚡ شبيك لبيك، فزعة بين إيديك:</p>
           <div className="grid grid-cols-3 gap-2">
-            <button onClick={() => handleFazaaAction('quick')} className="flex flex-col items-center gap-1 rounded- bg-emerald-50 border border-emerald-200 p-3 text- font-bold text-emerald-700 hover:bg-emerald-500 hover:text-white transition-colors"><Users className="h-5 w-5" /> فزعة سريعة</button>
-            <button onClick={() => handleFazaaAction('balance')} className="flex flex-col items-center gap-1 rounded- bg-slate-50 border border-slate-200 p-3 text- font-bold text-slate-700 hover:bg-slate-
+            <button onClick={() => handleFazaaAction('quick')} className="flex flex-col items-center gap-1 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs font-bold text-emerald-700 hover:bg-emerald-500 hover:text-white transition-colors"><Users className="h-5 w-5" /> فزعة سريعة</button>
+            <button onClick={() => handleFazaaAction('balance')} className="flex flex-col items-center gap-1 rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs font-bold text-slate-700 hover:bg-slate-900 hover:text-white transition-colors"><Scale className="h-5 w-5" /> وازن الفرق</button>
+            <button onClick={() => handleFazaaAction('keeper')} className="flex flex-col items-center gap-1 rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs font-bold text-slate-700 hover:bg-slate-900 hover:text-white transition-colors"><Hand className="h-5 w-5" /> جيب حارس</button>
+          </div>
+        </div>
+      )}
+
+      {/* --- أزرار الاقتراحات السريعة --- */}
+      {messageText.length === 0 && !fazaaMenuOpen && (
+        <div dir="rtl" className="border-b border-slate-100 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar justify-center">
+            {quickActions.map((c) => (
+              <button key={c.label} onClick={c.action} className="inline-flex w-fit shrink-0 items-center whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-700 transition-all hover:border-[#39ff88] hover:bg-[#39ff88] hover:text-[#032015] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                <span className="ml-1.5">{c.icon}</span>{c.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* --- منطقة الرسائل بخلفية خضراء داكنة مريحة (#041c14) --- */}
+      <div dir="rtl" className="flex-1 space-y-3 overflow-y-auto bg-[#f8fafc] px-4 py-4 dark:bg-[#041c14]">
+        <RemoteState {...messagesState} empty={!messages.length}>
+          <>
+            {messages.map((m, i) => {
+              const isMine = m.mine;
+              const isFazaa = m.sender_id === FAZAA_BOT_ID || m.author === 'فزعة' || m.text?.startsWith('🤖');
+              return (
+                <div key={m.id || i} className={`group flex flex-col ${isMine ? "items-end" : "items-start"}`}>
+                  <div className={`flex max-w-full items-end gap-2 ${isMine ? "flex-row" : "flex-row-reverse"}`}>
+                    {!isMine && <Avatar name={isFazaa ? "فزعة" : m.author || "لاعب"} size="h-8 w-8" />}
+                    <div 
+                      className={`relative inline-block w-fit max-w-[78%] cursor-pointer rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-[0_2px_8px_rgba(0,0,0,0.06)] whitespace-pre-wrap break-words transition-shadow ${
+                        isFazaa 
+                          ? "rounded-bl-2xl bg-[#0f172a] border-2 border-[#39ff88] text-white" 
+                          : isMine 
+                            ? "rounded-br-2xl bg-[#00d978] text-[#032015] font-medium" 
+                            : "rounded-bl-2xl border border-slate-100 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                      } ${selectedMessageId === (m.id || i) ? "ring-2 ring-[#39ff88] ring-offset-2 ring-offset-[#0b1215]" : ""}`} 
+                      onClick={() => setSelectedMessageId(selectedMessageId === (m.id || i) ? null : (m.id || i))}
+                      style={{ overflowWrap: 'anywhere' }}
+                    >
+                      {m.attachmentUrl && m.messageType === "image" && <img src={m.attachmentUrl} className="mb-2.5 max-h-60 w-fit rounded-xl object-cover" alt="" />}
+                      {m.attachmentUrl && m.messageType === "audio" && <audio controls src={m.attachmentUrl} className="mb-1 w-full rounded-full" />}
+                      <span>{m.text || m.body}</span>
+                      {isMine && selectedMessageId === (m.id || i) && (
+                        <button aria-label="حذف الرسالة" onClick={(e) => { e.stopPropagation(); handleDelete(m.id); setSelectedMessageId(null); }} className="absolute -left-10 top-1/2 -translate-y-1/2 rounded-full bg-white p-2 shadow-md dark:bg-slate-700">
+                          <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <span className={`pt-1.5 text-[10px] text-slate-400 ${isMine ? "pr-2" : "pl-10"}`}>{formatTime(m.created_at)}</span>
+                </div>
+              );
+            })}
+            <div ref={messagesEndRef} />
+          </>
+        </RemoteState>
+      </div>
+
+      {/* --- شريط الإرسال السفلي --- */}
+      <div dir="rtl" className="flex items-center gap-2 border-t border-slate-100 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-1 items-center gap-2 rounded-full border border-slate-100 bg-[#f1f5f9] px-4 py-2.5 transition-all focus-within:border-[#39ff88] focus-within:ring-2 focus-within:ring-[#39ff88]/20 dark:border-slate-700 dark:bg-slate-800">
+          <input value={messageText} onChange={e => { setMessageText(e.target.value); setRobotMood(e.target.value.trim() ? "typing" : "idle"); }} onKeyDown={e => e.key === "Enter" && handleSend()} placeholder="اكتب رسالتك للربع.." className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400 dark:text-white" />
+          <button aria-label="إرسال الرسالة" onClick={handleSend} disabled={sending || !messageText.trim()} className="text-[#39ff88] transition-opacity disabled:opacity-30">
+            <Send className="h-5 w-5" />
+          </button>
+        </div>
+        <input id="att" type="file" className="hidden" onChange={handleAttachment} />
+        <button aria-label="إضافة مرفق" onClick={() => document.getElementById("att")?.click()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#00d978] text-[#032015] shadow-sm transition-colors hover:bg-[#39ff88]">
+          <Plus className="h-5 w-5" />
+        </button>
+      </div>
+    </PhoneShell>
+  );
+}
