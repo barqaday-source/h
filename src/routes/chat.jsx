@@ -14,52 +14,72 @@ export const Route = createFileRoute("/chat")({
 
 const GENERAL_MATCH_ID = "00000000-0000-0000-0000-000000000001";
 
+function playChatSound(type) {
+  if (typeof window === "undefined") return;
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    const context = new AudioContext();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const isDelete = type === "delete";
+    oscillator.type = isDelete ? "sine" : "triangle";
+    oscillator.frequency.setValueAtTime(isDelete ? 260 : 520, context.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(isDelete ? 150 : 760, context.currentTime + 0.12);
+    gain.gain.setValueAtTime(0.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.055, context.currentTime + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.16);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.17);
+    oscillator.addEventListener("ended", () => context.close());
+  } catch {
+    // الصوت تجميلي فقط، ولا يجب أن يمنع الدردشة عند عدم دعمه.
+  }
+}
+
 // الروبوت الجديد من الإيميل - نظيف بدون أسماء
 function FazaaRobotNew({ size = 52 }) {
   return (
     <div style={{ width: size, height: size }} className="shrink-0">
-      <svg viewBox="0 0 200 220" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+      <svg viewBox="0 0 200 200" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" aria-label="كرة قدم بفزعة">
         <defs>
-          <linearGradient id="blue-glass" x1="60" y1="85" x2="140" y2="135" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#1d4ed8" stopOpacity="0.8" />
-            <stop offset="1" stopColor="#0f172a" stopOpacity="0.9" />
-          </linearGradient>
-          <linearGradient id="jet-glow" x1="0" y1="0" x2="0" y2="1">
-            <stop stopColor="#38bdf8" />
-            <stop offset="1" stopColor="#38bdf8" stopOpacity="0" />
-          </linearGradient>
+          <radialGradient id="ball-neon" cx="35%" cy="25%">
+            <stop stopColor="#ecfdf5" />
+            <stop offset="0.5" stopColor="#a7f3d0" />
+            <stop offset="1" stopColor="#34d399" />
+          </radialGradient>
+          <filter id="ball-glow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="5" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
           <style>{`
-            @keyframes blink {0%,90%,100%{transform:scaleY(1)}95%{transform:scaleY(0.1)}}
-            @keyframes lookAround{0%,100%{transform:translate(0,0)}30%{transform:translate(-2px,1px)}70%{transform:translate(2px,-1px)}}
-            @keyframes jetPulse{0%,100%{opacity:0.6;transform:scaleY(1)}50%{opacity:1;transform:scaleY(1.3)}}
-           .blinking-eyes{transform-origin:100px 47px;animation:blink 4s infinite}
-           .gazing-pupils{animation:lookAround 3s infinite ease-in-out}
-           .thruster-ray{transform-origin:center bottom;animation:jetPulse 0.4s infinite alternate}
+            @keyframes stare {0%,100%{transform:translate(0,0)}35%{transform:translate(-3px,1px)}65%{transform:translate(3px,-1px)}}
+            @keyframes ballFloat {0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-3px) rotate(2deg)}}
+            .staring-eyes{animation:stare 3.5s ease-in-out infinite}
+            .floating-ball{transform-origin:100px 100px;animation:ballFloat 3s ease-in-out infinite}
           `}</style>
         </defs>
-        <circle cx="100" cy="110" r="80" fill="#2563eb" opacity="0.15" />
-        {/* الجسم */}
-        <rect x="65" y="110" width="70" height="50" rx="18" fill="#e2e8f0" stroke="#0f172a" strokeWidth="2"/>
-        {/* الرأس - الزجاج الأزرق */}
-        <rect x="55" y="55" width="90" height="60" rx="22" fill="url(#blue-glass)" stroke="#38bdf8" strokeWidth="2"/>
-        <g className="blinking-eyes">
-          <circle cx="80" cy="85" r="9" fill="#38bdf8" />
-          <circle cx="120" cy="85" r="9" fill="#38bdf8" />
-          <g className="gazing-pupils">
-            <circle cx="80" cy="85" r="3" fill="white" />
-            <circle cx="120" cy="85" r="3" fill="white" />
+        <circle cx="100" cy="100" r="82" fill="#39ff88" opacity="0.13" filter="url(#ball-glow)" />
+        <g className="floating-ball">
+          <circle cx="100" cy="100" r="68" fill="url(#ball-neon)" stroke="#39ff88" strokeWidth="5" />
+          <path d="M100 62 118 75 111 97 89 97 82 75Z" fill="#064e3b" stroke="#022c22" strokeWidth="3" />
+          <path d="m82 75-22 7m58-7 22 7m-29 15 14 22m-25-22-14 22M60 82l8 39m72-39-8 39" fill="none" stroke="#065f46" strokeWidth="5" strokeLinecap="round" />
+          <g className="staring-eyes">
+            <ellipse cx="78" cy="82" rx="15" ry="18" fill="white" stroke="#022c22" strokeWidth="3" />
+            <ellipse cx="122" cy="82" rx="15" ry="18" fill="white" stroke="#022c22" strokeWidth="3" />
+            <circle cx="80" cy="84" r="6" fill="#071c16" />
+            <circle cx="124" cy="84" r="6" fill="#071c16" />
+            <circle cx="82" cy="81" r="2" fill="#39ff88" />
+            <circle cx="126" cy="81" r="2" fill="#39ff88" />
           </g>
+          <path d="M82 119 Q100 132 118 119" fill="none" stroke="#064e3b" strokeWidth="4" strokeLinecap="round" />
         </g>
-        {/* نفاثات */}
-        <rect x="75" y="160" width="12" height="20" rx="6" fill="#0f172a" />
-        <rect x="113" y="160" width="12" height="20" rx="6" fill="#0f172a" />
-        <rect className="thruster-ray" x="77" y="180" width="8" height="14" rx="4" fill="url(#jet-glow)" />
-        <rect className="thruster-ray" x="115" y="180" width="8" height="14" rx="4" fill="url(#jet-glow)" style={{animationDelay:'0.2s'}} />
       </svg>
     </div>
   );
 }
-
 function formatTime(iso) {
   if (!iso) return "الآن";
   try { return new Date(iso).toLocaleTimeString("ar-IQ", { hour: "numeric", minute: "2-digit", hour12: true }); } catch { return "الآن"; }
@@ -71,6 +91,7 @@ function ChatScreen() {
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef(null);
   const [userId, setUserId] = useState(null);
+  const [selectedMessageId, setSelectedMessageId] = useState(null);
 
   const quickActions = [
     { icon: "⚽", label: "فزعة", full: "يا ولد ناقصنا لاعبين، فزعة للربع! ⚽" },
@@ -107,17 +128,17 @@ function ChatScreen() {
     if (!userId || userId === 'undefined' || userId === 'null') { toast.error("جاري تحميل الجلسة"); return; }
     if (!matchId || matchId === 'undefined') return;
     setSending(true);
-    try { await sendMessage({ matchId, body }); setMessageText(""); await messagesState.reload(); } catch (e) { toast.error(e.message); } finally { setSending(false); }
+    try { await sendMessage({ matchId, body }); playChatSound("send"); setMessageText(""); await messagesState.reload(); } catch (e) { toast.error(e.message); } finally { setSending(false); }
   };
   const handleAttachment = async (e) => {
     const file = e.target.files?.[0]; if (!file) return;
     if (!userId || userId === 'undefined') { toast.error("انتظر تحميل الجلسة"); return; }
     setSending(true);
-    try { const att = await uploadChatAttachment(file); await sendMessage({ matchId, body: file.name, attachment: att }); await messagesState.reload(); } catch (err) { toast.error(err.message); } finally { setSending(false); e.target.value=""; }
+    try { const att = await uploadChatAttachment(file); await sendMessage({ matchId, body: file.name, attachment: att }); playChatSound("send"); await messagesState.reload(); } catch (err) { toast.error(err.message); } finally { setSending(false); e.target.value=""; }
   };
   const handleDelete = async (msgId) => {
     if (!msgId || msgId === 'undefined') return;
-    try { await supabase.from('messages').delete().eq('id', msgId); await messagesState.reload(); } catch { toast.error("ما انحذفت"); }
+    try { await supabase.from('messages').delete().eq('id', msgId); playChatSound("delete"); await messagesState.reload(); } catch { toast.error("ما انحذفت"); }
   };
 
   return (
@@ -127,13 +148,13 @@ function ChatScreen() {
       <header dir="rtl" className="relative flex min-h-[92px] items-center justify-between border-b border-slate-100 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <ThemeToggle className="h-10 w-10 rounded-full border border-slate-200 bg-slate-50 shadow-sm dark:border-slate-700 dark:bg-slate-800" />
         <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-blue-50 shadow-sm dark:bg-blue-950/40">
+          <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-emerald-950/60 shadow-[0_0_18px_rgba(57,255,136,0.25)]">
             <FazaaRobotNew size={44} />
           </div>
           <h1 className="mt-1 text-base font-extrabold tracking-wide text-slate-900 dark:text-white">فزعة</h1>
-          <span className="text-[10px] font-medium text-emerald-600">دردشة الربع</span>
+          <span className="text-[10px] font-medium text-[#39ff88]">دردشة الربع</span>
         </div>
-        <button aria-label="اتصال" className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 shadow-sm transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+        <button aria-label="اتصال" className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 shadow-sm transition-colors hover:border-[#39ff88] hover:bg-emerald-950/40 hover:text-[#39ff88] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
           <Phone className="h-4 w-4" />
         </button>
       </header>
@@ -142,7 +163,7 @@ function ChatScreen() {
         <div dir="rtl" className="border-b border-slate-100 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex gap-2 overflow-x-auto no-scrollbar justify-center">
             {quickActions.map((c)=>(
-              <button key={c.label} onClick={()=>setMessageText(c.full)} className="inline-flex w-fit shrink-0 items-center whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-700 transition-all hover:border-emerald-500 hover:bg-emerald-500 hover:text-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              <button key={c.label} onClick={()=>setMessageText(c.full)} className="inline-flex w-fit shrink-0 items-center whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-700 transition-all hover:border-[#39ff88] hover:bg-[#39ff88] hover:text-[#032015] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                 <span className="ml-1.5">{c.icon}</span>{c.label}
               </button>
             ))}
@@ -160,13 +181,13 @@ function ChatScreen() {
                   <div className={`flex max-w-full items-end gap-2 ${isMine?"flex-row":"flex-row-reverse"}`}>
                     {!isMine && <Avatar name={m.author||"لاعب"} size="h-8 w-8" />}
                     <div
-                      className={`relative inline-block w-fit max-w-[78%] rounded-[20px] px-4 py-3 text-sm leading-relaxed shadow-[0_2px_8px_rgba(0,0,0,0.06)] whitespace-pre-wrap break-words ${isMine?"rounded-br-[6px] bg-emerald-500 text-white":"rounded-bl-[6px] border border-slate-100 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"}`}
+                      className={`relative inline-block w-fit max-w-[78%] cursor-pointer rounded-[20px] px-4 py-3 text-sm leading-relaxed shadow-[0_2px_8px_rgba(0,0,0,0.06)] whitespace-pre-wrap break-words transition-shadow ${isMine?"rounded-br-[6px] bg-[#00d978] text-[#032015]":"rounded-bl-[6px] border border-slate-100 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"} ${selectedMessageId === (m.id || i) ? "ring-2 ring-[#39ff88] ring-offset-2 ring-offset-[#0b1215]" : ""}`} onClick={() => setSelectedMessageId(selectedMessageId === (m.id || i) ? null : (m.id || i))}
                       style={{ overflowWrap: 'anywhere' }}
                     >
                       {m.attachmentUrl && m.messageType==="image" && <img src={m.attachmentUrl} className="mb-2.5 max-h-60 w-fit rounded-[14px] object-cover" alt="" />}
                       {m.attachmentUrl && m.messageType==="audio" && <audio controls src={m.attachmentUrl} className="mb-1 w-full rounded-full" />}
                       <span>{m.text||m.body}</span>
-                      {isMine && <button aria-label="حذف الرسالة" onClick={()=>handleDelete(m.id)} className="absolute -left-10 top-1/2 -translate-y-1/2 rounded-full bg-white p-2 opacity-0 shadow-md transition-opacity group-hover:opacity-100"><Trash2 className="h-3.5 w-3.5 text-red-500" /></button>}
+                      {isMine && selectedMessageId === (m.id || i) && <button aria-label="حذف الرسالة" onClick={(e)=>{ e.stopPropagation(); handleDelete(m.id); setSelectedMessageId(null); }} className="absolute -left-10 top-1/2 -translate-y-1/2 rounded-full bg-white p-2 shadow-md"><Trash2 className="h-3.5 w-3.5 text-red-500" /></button>}
                     </div>
                   </div>
                   <span className={`pt-1.5 text-[11px] text-slate-400 ${isMine?"pr-2":"pl-10"}`}>{formatTime(m.created_at)}</span>
@@ -179,12 +200,12 @@ function ChatScreen() {
       </div>
 
       <div dir="rtl" className="flex items-center gap-2 border-t border-slate-100 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex min-h-[46px] flex-1 items-center gap-2 rounded-full border border-slate-100 bg-[#f1f5f9] px-4 py-2.5 transition-all focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100 dark:border-slate-700 dark:bg-slate-800">
+        <div className="flex min-h-[46px] flex-1 items-center gap-2 rounded-full border border-slate-100 bg-[#f1f5f9] px-4 py-2.5 transition-all focus-within:border-[#39ff88] focus-within:ring-2 focus-within:ring-[#39ff88]/20 dark:border-slate-700 dark:bg-slate-800">
           <input value={messageText} onChange={e=>setMessageText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSend()} placeholder="اكتب رسالتك للربع.." className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400 dark:text-white" />
-          <button aria-label="إرسال الرسالة" onClick={handleSend} disabled={sending ||!messageText.trim()} className="text-emerald-600 transition-opacity disabled:opacity-30"><Send className="h-5 w-5" /></button>
+          <button aria-label="إرسال الرسالة" onClick={handleSend} disabled={sending ||!messageText.trim()} className="text-[#39ff88] transition-opacity disabled:opacity-30"><Send className="h-5 w-5" /></button>
         </div>
         <input id="att" type="file" className="hidden" onChange={handleAttachment} />
-        <button aria-label="إضافة مرفق" onClick={()=>document.getElementById("att")?.click()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm transition-colors hover:bg-emerald-600"><Plus className="h-5 w-5" /></button>
+        <button aria-label="إضافة مرفق" onClick={()=>document.getElementById("att")?.click()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#00d978] text-[#032015] shadow-sm transition-colors hover:bg-[#39ff88]"><Plus className="h-5 w-5" /></button>
       </div>
     </PhoneShell>
   );
