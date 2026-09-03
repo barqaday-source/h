@@ -8,7 +8,7 @@ import { fetchProfile, setPlayerPresence, updateProfile } from "@/lib/data";
 import { getSession, isSupabaseConfigured, requireSupabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/profile")({
-  head: () => ({ meta: [{ title: "البروفايل | جَوَّك" }] }),
+  head: () => ({ meta: [{ title: "البروفايل | جَوَّك" }] }),
   component: ProfileScreen,
 });
 
@@ -192,7 +192,7 @@ function ProfileScreen() {
                     {avatarUrl ? (
                       <img src={avatarUrl} alt={displayName} className="h-20 w-20 rounded-full object-cover border-2 border-emerald-500" />
                     ) : (
-                      <Avatar name={displayName} size="h-20 w-20" online ring />
+                      <Avatar name={displayName} size="h-20 w-20" />
                     )}
                     <label className="absolute bottom-0 left-0 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500 text-slate-900 dark:text-[#032015] shadow-md cursor-pointer hover:scale-105 transition-transform">
                       <Camera className="h-3.5 w-3.5" />
