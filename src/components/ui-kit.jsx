@@ -36,39 +36,35 @@ export function ThemeToggle({ className = "" }) {
 }
 
 /** مكون الشعار المتجهي الاصلي عالي الجودة لتطبيق جوّك */
-export function Logo({ size = "h-10", className = "" }) {
+export function Logo({ size = "h-12", className = "" }) {
   return (
     <div className={`inline-flex items-center justify-center select-none ${className}`}>
-      <svg 
-        viewBox="0 0 320 260" 
+      <svg
+        viewBox="0 0 300 104"
+        role="img"
+        aria-label="جوك"
         className={`w-auto ${size} drop-shadow-sm transition-transform duration-200 hover:scale-105`}
-        fill="none" 
+        fill="none"
         xmlns="http://www.w3.org/2000/svg"
       >
         <defs>
-          <linearGradient id="jawkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#1e3e3b" />
-            <stop offset="50%" stopColor="#2dd4bf" />
-            <stop offset="100%" stopColor="#d97706" />
+          <linearGradient id="jawkBrandGradient" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#0f766e" />
+            <stop offset="1" stopColor="#16a34a" />
           </linearGradient>
         </defs>
 
-        {/* الأقواس الدائرية المتدرجة */}
-        <path d="M 65 130 A 100 100 0 0 1 245 35" stroke="url(#jawkGrad)" strokeWidth="6.5" strokeLinecap="round" />
-        <path d="M 225 220 A 100 100 0 0 1 65 190" stroke="url(#jawkGrad)" strokeWidth="6.5" strokeLinecap="round" />
+        {/* علامة عصرية تجمع بين حركة الملعب والكرة */}
+        <path d="M18 67C25 28 62 11 96 25C118 34 127 56 119 76C111 96 84 103 65 91" stroke="url(#jawkBrandGradient)" strokeWidth="9" strokeLinecap="round" />
+        <path d="M30 77C51 88 74 86 94 73" stroke="#84cc16" strokeWidth="7" strokeLinecap="round" />
+        <path d="M31 83L25 96M45 86L42 101M59 87L60 101M73 84L78 98M86 78L94 91" stroke="#65a30d" strokeWidth="3" strokeLinecap="round" />
+        <circle cx="91" cy="35" r="17" fill="#f8fafc" stroke="#0f766e" strokeWidth="4" />
+        <path d="M91 25L97 30L95 38L87 40L82 33L85 26M82 33L73 36M95 38L101 46M87 40L84 50" stroke="#0f766e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
 
-        {/* اسم جوّك الخطي المترابط */}
-        <g fill="currentColor" className="text-[#1e3e3b] dark:text-emerald-300">
-          <path d="M 265 135 C 255 105, 215 100, 190 125 C 170 143, 175 173, 195 180 C 220 190, 245 160, 230 140 C 215 120, 165 133, 140 163 C 123 185, 135 210, 160 210 C 185 210, 190 183, 173 170 C 155 155, 115 173, 93 155 C 73 139, 67 100, 40 135 C 23 160, 45 187, 77 187 C 113 187, 133 147, 105 127 C 87 113, 60 135, 83 145 Z" />
-          <path d="M 75 123 C 63 111, 70 98, 83 105 C 95 113, 87 131, 75 123 Z" />
-        </g>
-
-        {/* أيقونة الكرة الفسفورية في الأسفل */}
-        <g transform="translate(225, 155)">
-          <circle cx="22" cy="22" r="22" fill="#a3e635" />
-          <circle cx="22" cy="22" r="16" fill="none" stroke="#4d7c0f" strokeWidth="2" strokeDasharray="4 2" />
-          <polygon points="22,12 29,17 26,26 18,26 15,17" fill="#4d7c0f" />
-        </g>
+        {/* الاسم مكتوب بخط عربي واضح وأنيق */}
+        <text x="144" y="72" direction="rtl" textAnchor="middle" fill="currentColor" className="text-[#0f766e] dark:text-emerald-300" fontSize="49" fontWeight="800" fontFamily="Tajawal, Cairo, Arial, sans-serif">
+          جوك
+        </text>
       </svg>
     </div>
   );
@@ -93,7 +89,7 @@ export function Avatar({ name, size = "h-12 w-12", online = false, ring = false 
 
 export function Card({ children, className = "" }) {
   return (
-    <div className={`rounded-2xl border border-border bg-card p-4 shadow-card ${className}`}>
+    <div className={`relative z-10 my-4 rounded-2xl border border-border bg-card p-5 shadow-card ${className}`}>
       {children}
     </div>
   );
@@ -103,7 +99,7 @@ export function PrimaryButton({ children, className = "", ...props }) {
   return (
     <button
       type="button"
-      className={`flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-primary px-5 py-3.5 text-sm font-bold text-primary-foreground shadow-glow transition-opacity hover:opacity-90 ${className}`}
+      className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-primary px-6 py-4 text-sm font-bold text-primary-foreground shadow-glow transition-opacity hover:opacity-90 ${className}`}
       {...props}
     >
       {children}
@@ -115,7 +111,7 @@ export function GhostButton({ children, className = "", ...props }) {
   return (
     <button
       type="button"
-      className={`flex items-center justify-center gap-2 rounded-2xl border border-border bg-surface px-5 py-3.5 text-sm font-semibold text-foreground transition-colors hover:bg-surface-2 ${className}`}
+      className={`flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-border bg-surface px-6 py-4 text-sm font-semibold text-foreground transition-colors hover:bg-surface-2 ${className}`}
       {...props}
     >
       {children}
@@ -126,7 +122,7 @@ export function GhostButton({ children, className = "", ...props }) {
 export function Chip({ children, active = false }) {
   return (
     <span
-      className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-semibold ${
+      className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold ${
         active
           ? "bg-primary text-primary-foreground"
           : "border border-border bg-surface text-muted-foreground"
@@ -139,7 +135,7 @@ export function Chip({ children, active = false }) {
 
 export function SectionTitle({ children, action }) {
   return (
-    <div className="flex items-center justify-between px-5 pb-3 pt-5">
+    <div className="flex items-center justify-between gap-4 px-5 pb-4 pt-7">
       <h2 className="text-sm font-bold text-foreground">{children}</h2>
       {action ? <span className="text-xs text-muted-foreground">{action}</span> : null}
     </div>
