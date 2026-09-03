@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Award, ChevronLeft, MapPin, Radar, Settings, SquarePen, Star, User, Save } from "lucide-react";
+import { Award, ChevronLeft, MapPin, Radar, Settings, SquarePen, Star, User, Save, LogOut, Trash2, Phone } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Avatar, Card, PhoneShell, StatusBar, ThemeToggle } from "@/components/ui-kit";
@@ -8,7 +8,7 @@ import { fetchProfile, setPlayerPresence, updateProfile } from "@/lib/data";
 import { getSession, isSupabaseConfigured, requireSupabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/profile")({
-  head: () => ({ meta: [{ title: "البروفايل | جوك" }] }),
+  head: () => ({ meta: [{ title: "البروفايل | جَوَّك" }] }),
   component: ProfileScreen,
 });
 
@@ -17,8 +17,11 @@ function ProfileScreen() {
   const [userId, setUserId] = useState("");
   const [sessionLoading, setSessionLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  
+  // حقول التعديل المتكاملة
   const [editName, setEditName] = useState("");
   const [editCity, setEditCity] = useState("");
+  const [editPhone, setEditPhone] = useState("");
   const [presenceBusy, setPresenceBusy] = useState(false);
 
   useEffect(() => {
@@ -41,7 +44,7 @@ function ProfileScreen() {
         display_name: defaultName,
         full_name: defaultName,
         city: "البصرة",
-        role: "player",
+        role: "لاعب",
         status: "online"
       }, { onConflict: "id" });
       profile = await fetchProfile(userId);
@@ -51,15 +54,16 @@ function ProfileScreen() {
 
   const profile = profileState.data;
 
-  // استخراج الاسم والمدينة بشكل آمن بغض النظر عن اسم الحقل في قاعدة البيانات
   const displayName = profile?.display_name || profile?.full_name || profile?.name || "لاعب جوك";
   const displayCity = profile?.city || "البصرة";
+  const displayPhone = profile?.phone || "";
   const isPresenceActive = profile?.presence_active || profile?.presenceActive || false;
 
   useEffect(() => {
     if (profile) {
       setEditName(displayName);
       setEditCity(displayCity);
+      setEditPhone(displayPhone);
     }
   }, [profile]);
 
@@ -73,7 +77,7 @@ function ProfileScreen() {
         latitude: position?.coords?.latitude ?? null,
         longitude: position?.coords?.longitude ?? null,
       }).then(() => {
-        toast.success(nextActive ? "جمجم يعرف أنك متاح الآن" : "تم إيقاف استقبال طلبات جمجم");
+        toast.success(nextActive ? "جمجم يعرف أنك متاح الآن ⚡" : "تم إيقاف استقبال طلبات جمجم");
         profileState.reload();
       }).catch((e) => toast.error(e.message)).finally(() => setPresenceBusy(false));
 
@@ -87,8 +91,13 @@ function ProfileScreen() {
   const handleSaveProfile = async () => {
     if (!editName.trim()) { toast.error("الاسم مطلوب"); return; }
     try {
-      await updateProfile(userId, { display_name: editName.trim(), full_name: editName.trim(), city: editCity.trim() || "البصرة" });
-      toast.success("تم حفظ البروفايل");
+      await updateProfile(userId, { 
+        display_name: editName.trim(), 
+        full_name: editName.trim(), 
+        city: editCity.trim() || "البصرة",
+        phone: editPhone.trim()
+      });
+      toast.success("تم حفظ البروفايل بنجاح ⚽");
       setEditing(false);
       profileState.reload();
     } catch (e) { toast.error(e.message); }
@@ -97,10 +106,24 @@ function ProfileScreen() {
   const logout = async () => {
     try { 
       await requireSupabase().auth.signOut(); 
-      toast.success("تم تسجيل الخروج"); 
+      toast.success("تم تسجيل الخروج بنجاح"); 
       navigate({ to: "/auth" }); 
     } catch (e) { 
       toast.error(e.message); 
+    }
+  };
+
+  const deleteAccount = async () => {
+    if (!window.confirm("هل أنت متأكد من رغبتك في حذف الحساب نهائياً؟ لا يمكن التراجع عن هذا الإجراء.")) return;
+    try {
+      const client = requireSupabase();
+      // حذف بيانات البروفايل المرتبطة
+      await client.from("profiles").delete().eq("id", userId);
+      await client.auth.signOut();
+      toast.success("تم حذف الحساب بنجاح");
+      navigate({ to: "/auth" });
+    } catch (e) {
+      toast.error("فشل حذف الحساب: " + e.message);
     }
   };
 
@@ -108,7 +131,7 @@ function ProfileScreen() {
   if (!isSupabaseConfigured || !userId) return (
     <PhoneShell><StatusBar />
       <div className="px-5 pt-16 text-center">
-        <h2 className="text-xl font-extrabold text-white">سجّل دخولك أولاً</h2>
+        <h2 className="text-xl font-extrabold text-white">سجّل دخولك أولاً لربط حسابك</h2>
         <Link to="/auth" className="mt-6 block rounded-2xl bg-emerald-500 py-3.5 text-sm font-bold text-slate-900">الانتقال للتسجيل</Link>
       </div>
     </PhoneShell>
@@ -120,7 +143,7 @@ function ProfileScreen() {
       <div className="flex items-center justify-between px-5 py-3 border-b border-[#0d3b2c] bg-[#041c14] text-white">
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <button type="button" onClick={() => toast.info("الإعدادات محفوظة مباشرة")} className="flex h-10 w-10 items-center justify-center rounded-full border border-[#0d3b2c] bg-[#072c20] text-emerald-400">
+          <button type="button" onClick={() => toast.info("الجلسة محفوظة ومؤمنة عبر Supabase")} className="flex h-10 w-10 items-center justify-center rounded-full border border-[#0d3b2c] bg-[#072c20] text-emerald-400">
             <Settings className="h-4.5 w-4.5" />
           </button>
         </div>
@@ -146,7 +169,7 @@ function ProfileScreen() {
                       {profile.role || "لاعب"}
                     </span>
                     <span className="rounded-full border border-[#0d3b2c] bg-[#072c20] px-3 py-1 text-xs font-semibold text-emerald-300">
-                      {profile.status || "online"}
+                      متصل الآن
                     </span>
                   </div>
                 </div>
@@ -155,25 +178,41 @@ function ProfileScreen() {
                   <div className="px-5 pt-5 space-y-3">
                     <div className="rounded-2xl border border-[#0d3b2c] bg-[#072c20] p-4 space-y-3 shadow-md">
                       <div className="flex items-center gap-2 text-sm font-bold text-emerald-400">
-                        <User className="h-4 w-4" />تعديل البروفايل
+                        <User className="h-4 w-4" /> تعديل معلومات الحساب
                       </div>
-                      <input 
-                        value={editName} 
-                        onChange={e => setEditName(e.target.value)} 
-                        placeholder="الاسم" 
-                        className="w-full rounded-xl border border-[#0d3b2c] bg-[#041c14] px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500" 
-                      />
-                      <input 
-                        value={editCity} 
-                        onChange={e => setEditCity(e.target.value)} 
-                        placeholder="المدينة" 
-                        className="w-full rounded-xl border border-[#0d3b2c] bg-[#041c14] px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500" 
-                      />
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-emerald-400/70">الاسم الكامل</label>
+                        <input 
+                          value={editName} 
+                          onChange={e => setEditName(e.target.value)} 
+                          placeholder="الاسم" 
+                          className="w-full rounded-xl border border-[#0d3b2c] bg-[#041c14] px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500" 
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-emerald-400/70">المدينة / المنطقة</label>
+                        <input 
+                          value={editCity} 
+                          onChange={e => setEditCity(e.target.value)} 
+                          placeholder="المدينة (مثلاً: البصرة)" 
+                          className="w-full rounded-xl border border-[#0d3b2c] bg-[#041c14] px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500" 
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-emerald-400/70">رقم الهاتف (للتواصل وقت اللعبة)</label>
+                        <input 
+                          value={editPhone} 
+                          onChange={e => setEditPhone(e.target.value)} 
+                          placeholder="0780xxxxxxxx" 
+                          dir="ltr"
+                          className="w-full rounded-xl border border-[#0d3b2c] bg-[#041c14] px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500 text-left" 
+                        />
+                      </div>
                       <button 
                         onClick={handleSaveProfile} 
-                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-2.5 text-sm font-bold text-[#032015] active:scale-95 transition-all"
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-2.5 text-sm font-bold text-[#032015] active:scale-95 transition-all cursor-pointer"
                       >
-                        <Save className="h-4 w-4" />حفظ
+                        <Save className="h-4 w-4" /> حفظ التعديلات
                       </button>
                     </div>
                   </div>
@@ -185,7 +224,7 @@ function ProfileScreen() {
                       type="button" 
                       disabled={presenceBusy} 
                       onClick={toggleJawkPresence} 
-                      className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+                      className={`rounded-xl px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
                         isPresenceActive 
                           ? "bg-emerald-500 text-[#032015]" 
                           : "border border-[#0d3b2c] bg-[#041c14] text-emerald-400"
@@ -237,11 +276,19 @@ function ProfileScreen() {
                   </div>
                 </div>
 
-                <div className="px-5 pb-8 pt-6">
+                <div className="px-5 pb-8 pt-6 space-y-3">
                   <Card className="divide-y divide-[#0d3b2c] p-0 bg-[#072c20] border-[#0d3b2c]">
-                    <button type="button" onClick={logout} className="flex w-full items-center justify-between px-4 py-3.5">
+                    <button type="button" onClick={logout} className="flex w-full items-center justify-between px-4 py-3.5 cursor-pointer">
                       <ChevronLeft className="h-4 w-4 text-emerald-500/60" />
-                      <span className="text-sm text-red-400 font-medium">تسجيل الخروج</span>
+                      <span className="text-sm text-emerald-300 font-medium flex items-center gap-2">
+                        <LogOut className="h-4 w-4" /> تسجيل الخروج
+                      </span>
+                    </button>
+                    <button type="button" onClick={deleteAccount} className="flex w-full items-center justify-between px-4 py-3.5 cursor-pointer">
+                      <ChevronLeft className="h-4 w-4 text-red-500/60" />
+                      <span className="text-sm text-red-400 font-medium flex items-center gap-2">
+                        <Trash2 className="h-4 w-4" /> حذف الحساب نهائياً
+                      </span>
                     </button>
                   </Card>
                   <Link to="/summary" className="mt-4 block w-full rounded-2xl border border-[#0d3b2c] bg-[#072c20] py-3 text-center text-xs font-semibold text-emerald-300 hover:bg-emerald-950/40 transition-colors">
