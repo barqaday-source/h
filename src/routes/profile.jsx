@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Award, ChevronLeft, MapPin, Radar, Settings, SquarePen, User, Save, LogOut, Trash2 } from "lucide-react";
+import { Award, ChevronLeft, MapPin, Radar, Settings, SquarePen, User, Save, LogOut, Trash2, Camera } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Avatar, Card, PhoneShell, StatusBar, ThemeToggle } from "@/components/ui-kit";
@@ -22,6 +22,7 @@ function ProfileScreen() {
   const [editCity, setEditCity] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [presenceBusy, setPresenceBusy] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
     getSession().then(({ session }) => {
@@ -44,7 +45,10 @@ function ProfileScreen() {
         full_name: defaultName,
         city: "البصرة",
         role: "لاعب",
-        status: "online"
+        status: "online",
+        matches_count: 0,
+        wins_count: 0,
+        goals_count: 0
       }, { onConflict: "id" });
       profile = await fetchProfile(userId);
     }
@@ -56,6 +60,7 @@ function ProfileScreen() {
   const displayName = profile?.display_name || profile?.full_name || profile?.name || "لاعب جوك";
   const displayCity = profile?.city || "البصرة";
   const displayPhone = profile?.phone || "";
+  const avatarUrl = profile?.avatar_url || profile?.avatar || null;
   const isPresenceActive = profile?.presence_active || profile?.presenceActive || false;
 
   useEffect(() => {
@@ -66,12 +71,38 @@ function ProfileScreen() {
     }
   }, [profile]);
 
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
+    try {
+      setUploadingImage(true);
+      const client = requireSupabase();
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${userId}-${Math.random()}.${fileExt}`;
+      const filePath = `avatars/${fileName}`;
+
+      const { error: uploadError } = await client.storage.from("profiles").upload(filePath, file, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = client.storage.from("profiles").getPublicUrl(filePath);
+
+      await updateProfile(userId, { avatar_url: publicUrl });
+      toast.success("تم تحديث صورة البروفايل بنجاح 📸");
+      profileState.reload();
+    } catch (err) {
+      toast.error("فشل رفع الصورة: " + (err.message || "خطأ غير معروف"));
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const toggleJawkPresence = async () => {
     if (!userId || !profile) return;
     const nextActive = !isPresenceActive;
     setPresenceBusy(true);
     const save = (position) =>
       setPlayerPresence({
+        is_active: nextActive,
         active: nextActive,
         latitude: position?.coords?.latitude ?? null,
         longitude: position?.coords?.longitude ?? null,
@@ -141,12 +172,12 @@ function ProfileScreen() {
       <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-[#0d3b2c] bg-white dark:bg-[#041c14] text-slate-900 dark:text-white transition-colors">
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <button type="button" onClick={() => toast.info("الجلسة محفوظة ومؤمنة عبر Supabase")} className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 dark:border-[#0d3b2c] bg-slate-100 dark:bg-[#072c20] text-emerald-600 dark:text-emerald-400">
+          <button type="button" onClick={() => setEditing(v => !v)} className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 dark:border-[#0d3b2c] bg-slate-100 dark:bg-[#072c20] text-emerald-600 dark:text-emerald-400 cursor-pointer" title="الإعدادات">
             <Settings className="h-4.5 w-4.5" />
           </button>
         </div>
         <h2 className="text-lg font-extrabold">البروفايل</h2>
-        <button type="button" onClick={() => setEditing(v => !v)} className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 dark:border-[#0d3b2c] bg-slate-100 dark:bg-[#072c20] text-emerald-600 dark:text-emerald-400">
+        <button type="button" onClick={() => setEditing(v => !v)} className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 dark:border-[#0d3b2c] bg-slate-100 dark:bg-[#072c20] text-emerald-600 dark:text-emerald-400 cursor-pointer">
           <SquarePen className="h-4.5 w-4.5" />
         </button>
       </div>
@@ -157,7 +188,17 @@ function ProfileScreen() {
             {profile ? (
               <>
                 <div className="flex flex-col items-center gap-2 pt-4">
-                  <Avatar name={displayName} size="h-20 w-20" online ring />
+                  <div className="relative group">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt={displayName} className="h-20 w-20 rounded-full object-cover border-2 border-emerald-500" />
+                    ) : (
+                      <Avatar name={displayName} size="h-20 w-20" online ring />
+                    )}
+                    <label className="absolute bottom-0 left-0 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500 text-slate-900 dark:text-[#032015] shadow-md cursor-pointer hover:scale-105 transition-transform">
+                      <Camera className="h-3.5 w-3.5" />
+                      <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" disabled={uploadingImage} />
+                    </label>
+                  </div>
                   <h3 className="pt-1 text-lg font-extrabold">{displayName}</h3>
                   <p className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400/80">
                     <MapPin className="h-3 w-3" />{displayCity}
@@ -244,9 +285,9 @@ function ProfileScreen() {
 
                 <div className="grid grid-cols-3 gap-3 px-5 pt-5">
                   {[
-                    { id: 1, value: "87", label: "لعابت" },
-                    { id: 2, value: "42", label: "فوز" },
-                    { id: 3, value: "118", label: "هدف" }
+                    { id: 1, value: profile.matches_count ?? 0, label: "لعابت" },
+                    { id: 2, value: profile.wins_count ?? 0, label: "فوز" },
+                    { id: 3, value: profile.goals_count ?? 0, label: "هدف" }
                   ].map((stat) => (
                     <Card key={stat.id} className="p-3 text-center bg-white dark:bg-[#072c20] border-slate-200 dark:border-[#0d3b2c]">
                       <p className="text-xl font-extrabold text-slate-900 dark:text-white">{stat.value}</p>
@@ -262,11 +303,11 @@ function ProfileScreen() {
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     {[
-                      { id: 1, label: "هداف الحي" },
-                      { id: 2, label: "تحدي مستمر" },
-                      { id: 3, label: "نجم اللعبات" }
+                      { id: 1, label: "في البداية", active: (profile.goals_count ?? 0) > 0 },
+                      { id: 2, label: "لاعب نشط", active: (profile.matches_count ?? 0) > 0 },
+                      { id: 3, label: "أول فوز", active: (profile.wins_count ?? 0) > 0 }
                     ].map((badge) => (
-                      <Card key={badge.id} className="flex flex-col items-center gap-2 p-3 text-center bg-white dark:bg-[#072c20] border-slate-200 dark:border-[#0d3b2c]">
+                      <Card key={badge.id} className={`flex flex-col items-center gap-2 p-3 text-center bg-white dark:bg-[#072c20] border-slate-200 dark:border-[#0d3b2c] ${badge.active ? "" : "opacity-40 grayscale"}`}>
                         <Award className="h-6 w-6 text-amber-500 dark:text-amber-400" />
                         <span className="text-[11px] font-semibold text-slate-700 dark:text-emerald-200">{badge.label}</span>
                       </Card>
