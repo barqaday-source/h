@@ -17,6 +17,11 @@ export const Route = createFileRoute("/chat")({
   component: ChatScreen,
 });
 
+// خادم STUN المجاني من جوجل لربط الأجهزة عبر الإنترنت
+const ICE_SERVERS = {
+  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+};
+
 function ChatScreen() {
   const [matchId, setMatchId] = useState("general");
   const [matchName, setMatchName] = useState("الدردشة العامة للربع");
@@ -25,16 +30,19 @@ function ChatScreen() {
   const [recording, setRecording] = useState(false);
   const [stickersOpen, setStickersOpen] = useState(false);
 
-  // حالة الاتصال الصوتي الحقيقي (WebRTC Audio Call)
+  // حالات المكالمة الصوتية الحقيقية (WebRTC)
   const [inCall, setInCall] = useState(false);
-  const [callStatus, setCallStatus] = useState("جاري الاتصال...");
+  const [callStatus, setCallStatus] = useState("في الانتظار...");
   const [isMuted, setIsMuted] = useState(false);
+
   const localStreamRef = useRef(null);
+  const peerConnectionRef = useRef(null);
+  const remoteAudioRef = useRef(null);
+  const callChannelRef = useRef(null);
 
   const recorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
-  // جلب معرف المباراة أو التحويل التلقائي للغرفة العامة عند عدم وجود مباراة نشطة
   useEffect(() => {
     fetchCurrentMatchId()
       .then((id) => {
@@ -58,10 +66,12 @@ function ChatScreen() {
   );
   const messages = messagesState.data ?? [];
 
-  // اشتراك Supabase للرسائل الحية
+  // اشتراك الرسائل والإشارات الصوتية المباشرة عبر Supabase
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !matchId) return undefined;
-    const channel = supabase
+
+    // قناة الرسائل
+    const msgChannel = supabase
       .channel(`messages:${matchId}`)
       .on(
         "postgres_changes",
@@ -70,35 +80,136 @@ function ChatScreen() {
       )
       .subscribe();
 
+    // قناة الاتصال الصوتي الحقيقي (Signaling)
+    const callChannel = supabase.channel(`call:${matchId}`);
+    callChannelRef.current = callChannel;
+
+    callChannel
+      .on("broadcast", { event: "webrtc-signal" }, async ({ payload }) => {
+        if (!peerConnectionRef.current && payload.type === "offer") {
+          // استقبال مكالمة واردة من لاعب آخر
+          await handleIncomingCall(payload.offer);
+        } else if (peerConnectionRef.current) {
+          if (payload.type === "answer") {
+            await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(payload.answer));
+            setCallStatus("متصل باللاعب الآخر 🎙️");
+          } else if (payload.type === "candidate") {
+            try {
+              await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+            } catch {}
+          } else if (payload.type === "end-call") {
+            cleanUpCall();
+            toast.info("أغلق الطرف الآخر المكالمة");
+          }
+        }
+      })
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(msgChannel);
+      supabase.removeChannel(callChannel);
     };
   }, [matchId, messagesState.reload]);
 
-  // بدء اتصال صوتي حقيقي ومجاني (WebRTC)
+  // إعداد اتصال WebRTC الأصلي
+  const createPeerConnection = () => {
+    const pc = new RTCPeerConnection(ICE_SERVERS);
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && callChannelRef.current) {
+        callChannelRef.current.send({
+          type: "broadcast",
+          event: "webrtc-signal",
+          payload: { type: "candidate", candidate: event.candidate },
+        });
+      }
+    };
+
+    pc.ontrack = (event) => {
+      if (remoteAudioRef.current && event.streams[0]) {
+        remoteAudioRef.current.srcObject = event.streams[0];
+        remoteAudioRef.current.play().catch(() => {});
+        setCallStatus("المكالمة متصلة - الصوت يعمل 🔊");
+      }
+    };
+
+    peerConnectionRef.current = pc;
+    return pc;
+  };
+
+  // بدء مكالمة مجانية
   const startVoiceCall = async () => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      toast.error("المكالمات الصوتية غير مدعومة في جهازك/متصفحك");
-      return;
-    }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       localStreamRef.current = stream;
+
+      const pc = createPeerConnection();
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      callChannelRef.current?.send({
+        type: "broadcast",
+        event: "webrtc-signal",
+        payload: { type: "offer", offer },
+      });
+
       setInCall(true);
-      setCallStatus("المكالمة متصلة بالشبكة الحية");
-      toast.success("تم فتح القناة الصوتية المباشرة");
+      setCallStatus("جاري الاتصال بالربع...");
+      toast.success("تم إرسال دعوة الاتصال");
     } catch {
       toast.error("تعذر الوصول للميكروفون لبدء المكالمة");
     }
   };
 
-  const endVoiceCall = () => {
+  // الرد على مكالمة واردة
+  const handleIncomingCall = async (offer) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localStreamRef.current = stream;
+
+      const pc = createPeerConnection();
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      callChannelRef.current?.send({
+        type: "broadcast",
+        event: "webrtc-signal",
+        payload: { type: "answer", answer },
+      });
+
+      setInCall(true);
+      setCallStatus("متصل باللاعب الآخر 🎙️");
+      toast.info("تم الاتصال بالمكالمة الصوتية");
+    } catch {
+      toast.error("تعذر فتح الميكروفون للرد");
+    }
+  };
+
+  const cleanUpCall = () => {
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => track.stop());
       localStreamRef.current = null;
     }
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
     setInCall(false);
-    toast.info("تم إنهاء المكالمة الصوتية");
+  };
+
+  const endVoiceCall = () => {
+    callChannelRef.current?.send({
+      type: "broadcast",
+      event: "webrtc-signal",
+      payload: { type: "end-call" },
+    });
+    cleanUpCall();
+    toast.info("تم إنهاء المكالمة");
   };
 
   const toggleMute = () => {
@@ -111,7 +222,7 @@ function ChatScreen() {
     }
   };
 
-  // تسجيل وإرسال البصمات الصوتية
+  // تسجيل البصمات الصوتية
   const recordAudio = async () => {
     if (recording && recorderRef.current) {
       recorderRef.current.stop();
@@ -145,14 +256,10 @@ function ChatScreen() {
       recorderRef.current = recorder;
       recorder.start();
       setRecording(true);
-      recorder.addEventListener(
-        "stop",
-        () => {
-          recorderRef.current = null;
-          setRecording(false);
-        },
-        { once: true }
-      );
+      recorder.addEventListener("stop", () => {
+        recorderRef.current = null;
+        setRecording(false);
+      }, { once: true });
     } catch (error) {
       toast.error(error?.message || "تعذر الوصول إلى الميكروفون");
     }
@@ -193,6 +300,9 @@ function ChatScreen() {
   return (
     <PhoneShell withNav>
       <StatusBar />
+      {/* عنصر تشغيل صوت الطرف الآخر بشكل مخفي */}
+      <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
+
       {/* الترويسة العلوية */}
       <div className="flex items-center justify-between border-b border-border px-5 py-3">
         <div className="flex items-center gap-2">
@@ -232,7 +342,7 @@ function ChatScreen() {
         </div>
       </div>
 
-      {/* نافذة الاتصال الصوتي المباشر (WebRTC Call Overlay) */}
+      {/* شريط المكالمة الصوتية المباشرة */}
       {inCall && (
         <div className="p-4 bg-primary/10 border-b border-primary/20 flex items-center justify-between animate-in slide-in-from-top duration-300">
           <div className="flex items-center gap-3">
@@ -241,7 +351,7 @@ function ChatScreen() {
               <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
             </div>
             <div>
-              <p className="text-xs font-bold text-foreground">مكالمة صوتية نشطة</p>
+              <p className="text-xs font-bold text-foreground">مكالمة صوتية حية</p>
               <p className="text-[10px] text-muted-foreground">{callStatus}</p>
             </div>
           </div>
@@ -311,7 +421,7 @@ function ChatScreen() {
           </>
         </RemoteState>
 
-        {/* مساعد جوك الميداني بدلاً من بوت التسوق */}
+        {/* مساعد جوك */}
         <div className="rounded-2xl border border-primary/20 bg-primary/5 p-3.5 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div className="p-2 rounded-xl bg-primary/10 text-primary">
@@ -334,7 +444,7 @@ function ChatScreen() {
         </div>
       </div>
 
-      {/* لوحة الملصقات */}
+      {/* الملصقات */}
       {stickersOpen ? (
         <div className="flex gap-2 border-t border-border px-4 py-2 bg-surface" dir="rtl">
           {["⚽", "🔥", "👏", "😂", "💪", "🙌", "🚩", "🏆"].map((sticker) => (
@@ -350,7 +460,7 @@ function ChatScreen() {
         </div>
       ) : null}
 
-      {/* شريط أدوات كتابة الرسالة */}
+      {/* شريط الأدوات الإرسال */}
       <div className="flex items-center gap-2 border-t border-border px-4 py-3 bg-surface">
         <button
           type="button"
