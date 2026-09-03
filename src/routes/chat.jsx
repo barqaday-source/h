@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Send, Trash2, Sparkles, Bot, User, Zap } from "lucide-react";
+import { Send, Trash2, Sparkles, User, Zap } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PhoneShell, StatusBar, ThemeToggle } from "@/components/ui-kit";
@@ -12,7 +12,7 @@ export const Route = createFileRoute("/chat")({
   component: ChatScreen,
 });
 
-const FAZAA_PRIVATE_MATCH_ID = "00000000-0000-0000-0000-0000000000FA"; // قناة خاصة مع البوت
+const FAZAA_PRIVATE_MATCH_ID = "00000000-0000-0000-0000-0000000000FA"; // قناة خاصة مع المنظم
 
 function formatTime(iso) {
   if (!iso) return "الآن";
@@ -57,17 +57,6 @@ function ChatScreen() {
       await sendMessage({ matchId: FAZAA_PRIVATE_MATCH_ID, body }); 
       setMessageText(""); 
       await messagesState.reload(); 
-
-      // رد تجريبي فوري من فزعة
-      setTimeout(async () => {
-        await sendMessage({ 
-          matchId: FAZAA_PRIVATE_MATCH_ID, 
-          body: `🤖 أهلاً بك يا بارق! استلمت رسالتك وجاي أجهز لك الطلب بسرعة.. ⚡`,
-          senderId: "00000000-0000-0000-0000-0000000000FA"
-        });
-        await messagesState.reload();
-      }, 1000);
-
     } catch (e) { 
       toast.error(e.message); 
     } finally { 
@@ -86,7 +75,7 @@ function ChatScreen() {
     }
   };
 
-  // قائمة الاقتراحات السريعة الظاهرة فوق شريط الإرسال
+  // قائمة الاقتراحات السريعة
   const quickSuggestions = [
     "كفل لي لعبة 5×5 الليلة بمنطقتي",
     "منو أنشط لاعبين قربي الآن؟",
@@ -97,71 +86,68 @@ function ChatScreen() {
     <PhoneShell withNav>
       <StatusBar />
       
-      {/* --- الهيدر بتصميم سيساف المتناسق --- */}
-      <header dir="rtl" className="flex items-center justify-between border-b border-[#0d3b2c] bg-[#041c14] px-4 py-3 shadow-md">
-        <ThemeToggle className="h-9 w-9 rounded-full border border-[#0d3b2c] bg-[#072c20] text-emerald-400" />
+      {/* --- الهيدر الديناميكي باسم فزعة الاحترافي --- */}
+      <header dir="rtl" className="flex items-center justify-between border-b border-border bg-background px-4 py-3 shadow-sm">
+        <ThemeToggle />
         
         <div className="flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.3)]">
-            <Bot className="h-5 w-5" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 border border-primary/30 text-primary shadow-sm">
+            <Zap className="h-5 w-5" />
           </div>
           <div className="flex flex-col text-right">
-            <h1 className="text-sm font-bold tracking-wide text-white flex items-center gap-1">
-              شات فزعة <Sparkles className="h-3 w-3 text-emerald-400" />
+            <h1 className="text-sm font-bold tracking-wide text-foreground flex items-center gap-1">
+              فزعة <Sparkles className="h-3 w-3 text-primary" />
             </h1>
-            <span className="text-[10px] text-emerald-400 font-medium">محادثة خاصة بينك وبين البوت</span>
+            <span className="text-[10px] text-muted-foreground font-medium">محادثة ودعم تنسيق المباريات</span>
           </div>
         </div>
 
         <div className="w-9" /> 
       </header>
 
-      {/* --- منطقة الدردشة --- */}
-      <div dir="rtl" className="flex-1 space-y-3.5 overflow-y-auto bg-[#041c14] p-4 font-sans text-white">
+      {/* --- منطقة الدردشة الديناميكية --- */}
+      <div dir="rtl" className="flex-1 space-y-3.5 overflow-y-auto bg-background p-4 font-sans text-foreground">
         <RemoteState {...messagesState} empty={!messages.length}>
           <>
-            {/* رسالة ترحيبية أولية ثابتة */}
+            {/* رسالة ترحيبية أولية */}
             <div className="flex flex-col items-start">
               <div className="flex max-w-[85%] items-end gap-2 flex-row-reverse">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-900/80 text-emerald-300 border border-emerald-500/30 text-xs">
-                  🤖
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface text-foreground border border-border text-xs">
+                  ⚡
                 </div>
-                <div className="rounded-2xl rounded-bl-sm border border-emerald-500/30 bg-[#072c20] px-4 py-3 text-xs leading-relaxed text-emerald-100 shadow-md">
-                  هلا بيك 👋 آني شات فزعة. أكفل ربعك بسرعة: أجمع المنشطين بمنطقتك، أرتب اللعبة وأقترح الملعب والوقت. شتحب نسوي؟
+                <div className="rounded-2xl rounded-bl-sm border border-border bg-surface px-4 py-3 text-xs leading-relaxed text-foreground shadow-sm">
+                  هلا بيك 👋 آني خدمة فزعة. أكفل ربعك بسرعة: أجمع المنشطين بمنطقتك، أرتب اللعبة وأقترح الملعب والوقت. شتحب نسوي؟
                 </div>
               </div>
-              <span className="pl-9 pt-1 text-[10px] text-emerald-500/70">الآن</span>
+              <span className="pl-9 pt-1 text-[10px] text-muted-foreground">الآن</span>
             </div>
 
             {messages.map((m, i) => {
               const isMine = m.mine || (userId && m.sender_id === userId);
-              const isBot = m.sender_id === "00000000-0000-0000-0000-0000000000FA" || m.text?.startsWith('🤖');
               
               return (
                 <div key={m.id || i} className={`group flex flex-col ${isMine ? "items-end" : "items-start"}`}>
                   <div className={`flex max-w-[85%] items-end gap-2 ${isMine ? "flex-row" : "flex-row-reverse"}`}>
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-xs">
-                      {isBot ? "🤖" : <User className="h-3.5 w-3.5" />}
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface text-foreground border border-border text-xs">
+                      {isMine ? <User className="h-3.5 w-3.5" /> : "⚡"}
                     </div>
                     <div 
-                      className={`relative inline-block w-fit cursor-pointer rounded-2xl px-4 py-3 text-xs leading-relaxed shadow-md whitespace-pre-wrap break-words transition-all ${
-                        isBot 
-                          ? "rounded-bl-sm border border-emerald-500/40 bg-[#072c20] text-emerald-100" 
-                          : isMine 
-                            ? "rounded-br-sm bg-emerald-500 text-[#032015] font-semibold" 
-                            : "rounded-bl-sm border border-slate-700 bg-slate-800 text-slate-200"
-                      } ${selectedMessageId === (m.id || i) ? "ring-2 ring-emerald-400 ring-offset-2 ring-offset-[#041c14]" : ""}`} 
+                      className={`relative inline-block w-fit cursor-pointer rounded-2xl px-4 py-3 text-xs leading-relaxed shadow-sm whitespace-pre-wrap break-words transition-all ${
+                        isMine 
+                          ? "rounded-br-sm bg-primary text-primary-foreground font-semibold" 
+                          : "rounded-bl-sm border border-border bg-surface text-foreground"
+                      } ${selectedMessageId === (m.id || i) ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`} 
                       onClick={() => setSelectedMessageId(selectedMessageId === (m.id || i) ? null : (m.id || i))}
                     >
                       <span>{m.text || m.body}</span>
                       {isMine && selectedMessageId === (m.id || i) && (
-                        <button aria-label="حذف الرسالة" onClick={(e) => { e.stopPropagation(); handleDelete(m.id); setSelectedMessageId(null); }} className="absolute -left-9 top-1/2 -translate-y-1/2 rounded-full bg-slate-800 p-1.5 shadow-md border border-slate-700">
-                          <Trash2 className="h-3 w-3 text-red-400" />
+                        <button aria-label="حذف الرسالة" onClick={(e) => { e.stopPropagation(); handleDelete(m.id); setSelectedMessageId(null); }} className="absolute -left-9 top-1/2 -translate-y-1/2 rounded-full bg-surface p-1.5 shadow-sm border border-border">
+                          <Trash2 className="h-3 w-3 text-destructive" />
                         </button>
                       )}
                     </div>
                   </div>
-                  <span className={`pt-1 text-[10px] text-emerald-500/60 ${isMine ? "pr-9" : "pl-9"}`}>{formatTime(m.created_at)}</span>
+                  <span className={`pt-1 text-[10px] text-muted-foreground ${isMine ? "pr-9" : "pl-9"}`}>{formatTime(m.created_at)}</span>
                 </div>
               );
             })}
@@ -170,23 +156,23 @@ function ChatScreen() {
         </RemoteState>
       </div>
 
-      {/* --- شريط الاقتراحات السريعة (من التصميم الجديد) --- */}
-      <div dir="rtl" className="bg-[#041c14] px-3 pt-2 pb-1 border-t border-[#0d3b2c]/40 flex gap-2 overflow-x-auto no-scrollbar">
+      {/* --- شريط الاقتراحات السريعة الديناميكي --- */}
+      <div dir="rtl" className="bg-background px-3 pt-2 pb-1 border-t border-border flex gap-2 overflow-x-auto no-scrollbar">
         {quickSuggestions.map((suggestion, idx) => (
           <button
             key={idx}
             onClick={() => handleSend(suggestion)}
-            className="shrink-0 rounded-full border border-emerald-500/30 bg-[#072c20] px-3 py-1.5 text-[11px] text-emerald-200 hover:bg-emerald-900/50 transition-colors"
+            className="shrink-0 rounded-full border border-border bg-surface px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
           >
             {suggestion}
           </button>
         ))}
       </div>
 
-      {/* --- شريط الإرسال السفلي --- */}
-      <div dir="rtl" className="flex items-center gap-2 bg-[#041c14] p-3">
+      {/* --- شريط الإرسال السفلي الديناميكي --- */}
+      <div dir="rtl" className="flex items-center gap-2 bg-background p-3 border-t border-border">
         <div className="relative flex-1 flex items-center">
-          <span className="absolute right-3 text-emerald-400/70">
+          <span className="absolute right-3 text-muted-foreground">
             <Zap className="h-4 w-4" />
           </span>
           <input 
@@ -194,14 +180,14 @@ function ChatScreen() {
             onChange={e => setMessageText(e.target.value)} 
             onKeyDown={e => e.key === "Enter" && handleSend()} 
             placeholder="اكتب: كفل لي لعبة الليلة..." 
-            className="w-full rounded-xl border border-[#0d3b2c] bg-[#072c20] pr-9 pl-4 py-3 text-xs text-white outline-none placeholder:text-emerald-500/50 focus:border-emerald-500" 
+            className="w-full rounded-xl border border-border bg-surface pr-9 pl-4 py-3 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-primary" 
           />
         </div>
         <button 
           aria-label="إرسال الرسالة" 
           onClick={() => handleSend()} 
           disabled={sending || !messageText.trim()} 
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-[#032015] transition-transform active:scale-95 disabled:opacity-30 cursor-pointer shadow-md"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-transform active:scale-95 disabled:opacity-30 cursor-pointer shadow-sm"
         >
           <Send className="h-4 w-4" />
         </button>
