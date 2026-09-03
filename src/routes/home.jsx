@@ -18,8 +18,10 @@ import {
   fetchNotifications,
   uploadStory,
   deleteStory,
+  viewStory,
+  fetchStoryViewers
 } from "@/lib/data";
-import { getSession, supabase } from "@/lib/supabase";
+import { getSession } from "@/lib/supabase";
 
 export const Route = createFileRoute("/home")({
   head: () => ({
@@ -33,40 +35,11 @@ function getTimeAgo(dateString) {
   const date = new Date(dateString);
   const now = new Date();
   const diffInMinutes = Math.floor((now - date) / (1000 * 60));
-
   if (diffInMinutes < 1) return "الآن";
   if (diffInMinutes < 60) return `منذ ${diffInMinutes} دقيقة`;
   const diffInHours = Math.floor(diffInMinutes / 60);
   if (diffInHours < 24) return `منذ ${diffInHours} ساعة`;
   return "منذ يوم";
-}
-
-// === دوال المشاهدات ===
-async function viewStory(storyId: string) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session ||!storyId) return;
-
-  const { data: story } = await supabase.from("stories").select("user_id").eq("id", storyId).single();
-  if (story?.user_id === session.user.id) return; // لا تحسب مشاهدة لنفسك
-
-  await supabase.from("story_views").upsert(
-    { story_id: storyId, viewer_id: session.user.id },
-    { onConflict: "story_id,viewer_id" }
-  );
-}
-
-async function fetchStoryViewers(storyId: string) {
-  const { data, error } = await supabase
-   .from("story_views")
-   .select(`
-      created_at,
-      profiles:viewer_id ( id, full_name, avatar_url )
-    `)
-   .eq("story_id", storyId)
-   .order("created_at", { ascending: false });
-
-  if (error) throw error;
-  return data?? [];
 }
 
 function HomeScreen() {
@@ -76,21 +49,18 @@ function HomeScreen() {
   const [profile, setProfile] = useState(null);
   const [activeFilter, setActiveFilter] = useState("nearby");
   const [storyUploading, setStoryUploading] = useState(false);
-
   const [localStories, setLocalStories] = useState([]);
   const [activeStoryGroup, setActiveStoryGroup] = useState(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
   const [storyProgress, setStoryProgress] = useState(0);
-
-  // حالات المشاهدين الجديدة
-  const [viewers, setViewers] = useState<any[]>([]);
+  const [viewers, setViewers] = useState([]);
   const [showViewers, setShowViewers] = useState(false);
 
   const dataState = useRemoteData(() => fetchHomeData({ query }), [query]);
   const notificationsState = useRemoteData(fetchNotifications, []);
   const rawData = dataState.data?? { stories: [], nearbyMatches: [], mapPins: [] };
   const notifications = notificationsState.data?? [];
-  const unreadCount = notifications.filter((notification) =>!notification.read_at).length;
+  const unreadCount = notifications.filter((n) =>!n.read_at).length;
 
   useEffect(() => {
     getSession().then(({ session }) => {
@@ -102,16 +72,12 @@ function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    if (rawData.stories) {
-      setLocalStories(rawData.stories);
-    }
+    if (rawData.stories) setLocalStories(rawData.stories);
   }, [rawData.stories]);
 
   const validStories = (localStories || []).filter((s) => {
     if (!s.created_at) return true;
-    const createdAt = new Date(s.created_at).getTime();
-    const now = new Date().getTime();
-    return now - createdAt < 24 * 60 * 60 * 1000;
+    return Date.now() - new Date(s.created_at).getTime() < 24 * 60 * 60 * 1000;
   });
 
   const groupedStories = validStories.reduce((acc, story) => {
@@ -119,7 +85,7 @@ function HomeScreen() {
     if (!acc[ownerId]) {
       acc[ownerId] = {
         userId: ownerId,
-        userName: story.profiles?.full_name || story.title || "لاعب جوك",
+        userName: story.profiles?.full_name || story.profiles?.display_name || story.title || "لاعب جوك",
         stories: [],
       };
     }
@@ -133,7 +99,7 @@ function HomeScreen() {
   const handleNextStory = () => {
     if (!activeStoryGroup) return;
     if (activeStoryIndex < activeStoryGroup.stories.length - 1) {
-      setActiveStoryIndex((prev) => prev + 1);
+      setActiveStoryIndex((p) => p + 1);
       setStoryProgress(0);
     } else {
       setActiveStoryGroup(null);
@@ -145,60 +111,44 @@ function HomeScreen() {
 
   const handlePrevStory = () => {
     if (activeStoryIndex > 0) {
-      setActiveStoryIndex((prev) => prev - 1);
-      setStoryProgress(0);
-    } else {
+      setActiveStoryIndex((p) => p - 1);
       setStoryProgress(0);
     }
   };
 
   useEffect(() => {
     if (!activeStoryGroup) return;
-
     const currentStory = activeStoryGroup.stories[activeStoryIndex];
     if (!currentStory?.id) return;
-    const mediaUrl = currentStory?.media_url || currentStory?.image_url || currentStory?.url;
-    const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
 
-    // تسجيل المشاهدة وجلب المشاهدين
     viewStory(currentStory.id);
     if (activeStoryGroup.userId === userId) {
-      fetchStoryViewers(currentStory.id).then(setViewers).catch(() => {});
+      fetchStoryViewers(currentStory.id).then(setViewers).catch(()=>{});
     } else {
       setViewers([]);
     }
 
-    setStoryProgress(0);
+    const mediaUrl = currentStory?.media_url || currentStory?.image_url || currentStory?.url;
+    const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
     if (isVideo) return;
-
-    const DURATION = 5000;
-    const INTERVAL = 50;
-    const step = (INTERVAL / DURATION) * 100;
 
     const timer = setInterval(() => {
       setStoryProgress((prev) => {
-        if (prev + step >= 100) {
+        if (prev + 2 >= 100) {
           clearInterval(timer);
           handleNextStory();
           return 100;
         }
-        return prev + step;
+        return prev + 2;
       });
-    }, INTERVAL);
-
+    }, 50);
     return () => clearInterval(timer);
   }, [activeStoryGroup, activeStoryIndex]);
 
   const handleShareStory = async (story) => {
     const url = window.location.href;
     if (navigator.share) {
-      try {
-        await navigator.share({
-          title: "قصة على جوك",
-          text: `شاهد قصة ${story.title || "لاعب"} على جوك!`,
-          url,
-        });
-      } catch {}
+      try { await navigator.share({ title: "قصة على جوك", text: `شاهد قصة ${story.title || "لاعب"}`, url }); } catch {}
     } else {
       await navigator.clipboard.writeText(url);
       toast.success("تم نسخ رابط القصة");
@@ -207,21 +157,16 @@ function HomeScreen() {
 
   const handleDeleteCurrentStory = async (story) => {
     const targetId = story?.id;
-
-    setLocalStories((prev) =>
-      prev.filter((s) => (targetId? s.id!== targetId : s.user_id!== activeStoryGroup?.userId))
-    );
+    setLocalStories((prev) => prev.filter((s) => targetId? s.id!== targetId : s.user_id!== activeStoryGroup?.userId));
     setActiveStoryGroup(null);
     setActiveStoryIndex(0);
     setShowViewers(false);
-
     try {
       await deleteStory(targetId);
       toast.success("تم حذف القصة بنجاح");
       await dataState.reload();
-    } catch (error) {
-      console.error(error);
-      toast.error("حدث خطأ أثناء الحذف من قاعدة البيانات");
+    } catch (e) {
+      toast.error("حدث خطأ أثناء الحذف");
       await dataState.reload();
     }
   };
@@ -229,357 +174,105 @@ function HomeScreen() {
   return (
     <PhoneShell withNav>
       <div className="flex flex-1 flex-col overflow-y-auto pb-6 no-scrollbar">
-        {/* الترويسة العلوية */}
         <div className="flex items-center justify-between px-5 py-3">
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <NotificationButton
-              count={unreadCount}
-              onClick={() => setNotificationsOpen((open) =>!open)}
-            />
+            <NotificationButton count={unreadCount} onClick={() => setNotificationsOpen((o) =>!o)} />
           </div>
           <Logo size="h-9" />
-          <Avatar name={profile?.full_name || ""} size="h-10 w-10" online />
+          <Avatar name={profile?.full_name || profile?.display_name || ""} size="h-10 w-10" online />
         </div>
 
-        {/* شريط القصص (الاستوري) */}
         <div className="flex gap-4 overflow-x-auto px-5 py-2 no-scrollbar" dir="rtl">
-          {/* قصتك */}
           <div className="flex flex-col items-center gap-1.5 shrink-0">
             <div className="relative flex items-center justify-center">
               {myStoryGroup? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveStoryGroup(myStoryGroup);
-                    setActiveStoryIndex(0);
-                  }}
-                  className="flex h-16 w-16 items-center justify-center rounded-full p- bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 shadow-md transition-transform active:scale-95"
-                >
+                <button type="button" onClick={() => { setActiveStoryGroup(myStoryGroup); setActiveStoryIndex(0); }} className="flex h-16 w-16 items-center justify-center rounded-full p- bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600">
                   <span className="h-full w-full rounded-full border-2 border-background overflow-hidden bg-slate-900 flex items-center justify-center">
-                    {myStoryGroup.stories[0]?.media_url || myStoryGroup.stories[0]?.image_url? (
-                      <img
-                        src={
-                          myStoryGroup.stories[0]?.media_url ||
-                          myStoryGroup.stories[0]?.image_url
-                        }
-                        alt="قصتك"
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <User className="h-6 w-6 text-white" />
-                    )}
+                    <img src={myStoryGroup.stories[0]?.media_url || myStoryGroup.stories[0]?.image_url} alt="قصتك" className="h-full w-full object-cover" />
                   </span>
                 </button>
               ) : (
-                <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-dashed border-primary bg-surface text-primary">
-                  <User className="h-6 w-6 text-muted-foreground" />
-                </div>
+                <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-dashed border-primary bg-surface"><User className="h-6 w-6 text-muted-foreground" /></div>
               )}
-
-              <label className="absolute -bottom-1 -left-1 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-primary text-white shadow-md border-2 border-background transition-transform active:scale-90">
+              <label className="absolute -bottom-1 -left-1 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-primary text-white border-2 border-background">
                 {storyUploading? "..." : <Plus className="h-3.5 w-3.5" />}
-                <input
-                  type="file"
-                  accept="image/*,video/*"
-                  className="hidden"
-                  onChange={async (event) => {
-                    const file = event.target.files?.[0];
-                    if (!file) return;
-                    setStoryUploading(true);
-                    try {
-                      await uploadStory(file);
-                      toast.success("تم رفع القصة بنجاح");
-                      await dataState.reload();
-                    } catch (error) {
-                      toast.error(error?.message || "تعذر رفع القصة");
-                    } finally {
-                      setStoryUploading(false);
-                      event.target.value = "";
-                    }
-                  }}
-                />
+                <input type="file" accept="image/*,video/*" className="hidden" onChange={async (e) => {
+                  const file = e.target.files?.[0]; if (!file) return;
+                  setStoryUploading(true);
+                  try { await uploadStory(file); toast.success("تم رفع القصة"); await dataState.reload(); } catch (err) { toast.error(err?.message || "تعذر رفع القصة"); } finally { setStoryUploading(false); e.target.value = ""; }
+                }} />
               </label>
             </div>
-            <span className="text- font-medium text-foreground">قصتك</span>
+            <span className="text- font-medium">قصتك</span>
           </div>
-
-          {/* قصص الربع واللاعبين */}
           {otherStoryGroups.map((group) => {
             const firstStory = group.stories[0];
-            const mediaUrl =
-              firstStory?.media_url || firstStory?.image_url || firstStory?.url;
+            const mediaUrl = firstStory?.media_url || firstStory?.image_url || firstStory?.url;
             const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
-
             return (
-              <button
-                key={group.userId}
-                type="button"
-                className="flex flex-col items-center gap-1.5 shrink-0 transition-transform active:scale-95"
-                onClick={() => {
-                  setActiveStoryGroup(group);
-                  setActiveStoryIndex(0);
-                }}
-              >
-                <span className="flex h-16 w-16 items-center justify-center rounded-full p- bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 shadow-md">
+              <button key={group.userId} type="button" className="flex flex-col items-center gap-1.5 shrink-0" onClick={() => { setActiveStoryGroup(group); setActiveStoryIndex(0); }}>
+                <span className="flex h-16 w-16 items-center justify-center rounded-full p- bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600">
                   <span className="h-full w-full rounded-full border-2 border-background overflow-hidden bg-slate-900 flex items-center justify-center">
-                    {isVideo? (
-                      <video
-                        src={mediaUrl}
-                        className="h-full w-full object-cover pointer-events-none"
-                      />
-                    ) : mediaUrl? (
-                      <img
-                        src={mediaUrl}
-                        alt="ستوري"
-                        className="h-full w-full object-cover pointer-events-none"
-                      />
-                    ) : (
-                      <User className="h-6 w-6 text-muted-foreground" />
-                    )}
+                    {isVideo? <video src={mediaUrl} className="h-full w-full object-cover" /> : mediaUrl? <img src={mediaUrl} alt="ستوري" className="h-full w-full object-cover" /> : <User className="h-6 w-6 text-muted-foreground" />}
                   </span>
                 </span>
-                <span className="text- text-muted-foreground truncate w-16 text-center">
-                  {group.userName}
-                </span>
+                <span className="text- text-muted-foreground truncate w-16 text-center">{group.userName}</span>
               </button>
             );
           })}
         </div>
 
-        {/* حقل البحث */}
         <div className="px-5 pt-2">
-          <label className="flex items-center gap-2 rounded-2xl border border-border bg-surface px-4 py-3 shadow-sm">
+          <label className="flex items-center gap-2 rounded-2xl border border-border bg-surface px-4 py-3">
             <Search className="h-4 w-4 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="ابحث عن ملعب أو منطقة.."
-              className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-            />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث عن ملعب أو منطقة.." className="w-full bg-transparent text-sm outline-none" />
           </label>
         </div>
 
-        {/* أزرار الفلاتر والتصنيفات الشفافة والتطابق */}
         <div className="flex items-center gap-2.5 overflow-x-auto px-5 pt-3 pb-1 no-scrollbar" dir="rtl">
-          {[
-            { id: "nearby", label: "اللعبات القريبة" },
-            { id: "venues", label: "ملاعب" },
-            { id: "active", label: "الربع النشط" },
-          ].map((filter) => (
-            <Chip
-              key={filter.id}
-              active={activeFilter === filter.id}
-              onClick={() => setActiveFilter(filter.id)}
-            >
-              {filter.label}
-            </Chip>
+          {[{ id: "nearby", label: "اللعبات القريبة" }, { id: "venues", label: "ملاعب" }, { id: "active", label: "الربع النشط" }].map((filter) => (
+            <Chip key={filter.id} active={activeFilter === filter.id} onClick={() => setActiveFilter(filter.id)}>{filter.label}</Chip>
           ))}
         </div>
 
-        {/* خريطة الملاعب الحية */}
         <div className="px-5 pt-3">
-          <div className="relative h-80 w-full overflow-hidden rounded-3xl border border-border shadow-sm">
-            <LiveMap
-              venues={rawData.mapPins}
-              onVenueClick={(venue) =>
-                toast.info(venue.address || `تم اختيار ${venue.name}`)
-              }
-              onLocate={(error) => error && toast.info("يرجى السماح بتحديد الموقع")}
-            />
-            <Link
-              to="/fazaa"
-              className="absolute bottom-4 left-4 flex items-center gap-1.5 rounded-full bg-gradient-primary px-4 py-2.5 text-xs font-bold text-primary-foreground shadow-glow transition-transform active:scale-95"
-            >
-              <Zap className="h-4 w-4" />
-              فزعة
-            </Link>
+          <div className="relative h-80 w-full overflow-hidden rounded-3xl border border-border">
+            <LiveMap venues={rawData.mapPins} onVenueClick={(v) => toast.info(v.address || v.name)} onLocate={(err) => err && toast.info("يرجى السماح بتحديد الموقع")} />
+            <Link to="/fazaa" className="absolute bottom-4 left-4 flex items-center gap-1.5 rounded-full bg-gradient-primary px-4 py-2.5 text-xs font-bold text-primary-foreground"><Zap className="h-4 w-4" /> فزعة</Link>
           </div>
         </div>
       </div>
 
-      {/* عارض القصة بنمط أنستغرام + المشاهدين */}
-      {activeStoryGroup &&
-        (() => {
-          const currentStory = activeStoryGroup.stories[activeStoryIndex];
-          const mediaUrl =
-            currentStory?.media_url || currentStory?.image_url || currentStory?.url;
-          const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
-          const timeAgo = getTimeAgo(currentStory?.created_at);
-          const isMyStory = activeStoryGroup.userId === userId;
-
-          return (
-            <div className="fixed inset-0 z-[99999] h- w-full bg-black select-none flex flex-col justify-between overflow-hidden animate-in fade-in duration-200">
-              <div className="absolute top-0 inset-x-0 z-30 p-4 pt-6 bg-gradient-to-b from-black/90 via-black/50 to-transparent">
-                <div className="flex gap-1.5 mb-3">
-                  {activeStoryGroup.stories.map((s, idx) => (
-                    <div
-                      key={s.id || idx}
-                      className="h-1 flex-1 rounded-full bg-white/30 overflow-hidden"
-                    >
-                      <div
-                        className="h-full bg-white transition-all duration-75 ease-linear"
-                        style={{
-                          width:
-                            idx === activeStoryIndex
-                             ? `${storyProgress}%`
-                              : idx < activeStoryIndex
-                             ? "100%"
-                              : "0%",
-                        }}
-                      />
-                    </div>
-                  ))}
+      {activeStoryGroup && (() => {
+        const currentStory = activeStoryGroup.stories[activeStoryIndex];
+        const mediaUrl = currentStory?.media_url || currentStory?.image_url || currentStory?.url;
+        const isVideo = mediaUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
+        const timeAgo = getTimeAgo(currentStory?.created_at);
+        const isMyStory = activeStoryGroup.userId === userId;
+        return (
+          <div className="fixed inset-0 z-[99999] h- w-full bg-black flex flex-col overflow-hidden">
+            <div className="absolute top-0 inset-x-0 z-30 p-4 pt-6 bg-gradient-to-b from-black/90 to-transparent">
+              <div className="flex gap-1.5 mb-3">
+                {activeStoryGroup.stories.map((s, idx) => (
+                  <div key={s.id || idx} className="h-1 flex-1 rounded-full bg-white/30 overflow-hidden">
+                    <div className="h-full bg-white" style={{ width: idx === activeStoryIndex? `${storyProgress}%` : idx < activeStoryIndex? "100%" : "0%" }} />
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-9 w-9 rounded-full border border-white/50 overflow-hidden bg-slate-800 flex items-center justify-center"><User className="h-5 w-5 text-white" /></div>
+                  <div className="flex flex-col text-right"><span className="text-xs font-bold text-white">{activeStoryGroup.userName}</span><span className="text- text-slate-300">{timeAgo}</span></div>
                 </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="h-9 w-9 rounded-full border border-white/50 overflow-hidden bg-slate-800 flex items-center justify-center">
-                      <User className="h-5 w-5 text-white" />
-                    </div>
-                    <div className="flex flex-col text-right">
-                      <span className="text-xs font-bold text-white drop-shadow">
-                        {activeStoryGroup.userName}
-                      </span>
-                      <span className="text- text-slate-300">{timeAgo}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 z-40">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleShareStory(currentStory);
-                      }}
-                      className="p-2 rounded-full bg-black/40 text-white hover:bg-black/70 transition active:scale-90"
-                      title="مشاركة"
-                    >
-                      <Share2 className="h-4 w-4" />
-                    </button>
-
-                    {isMyStory && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteCurrentStory(currentStory);
-                        }}
-                        className="p-2.5 rounded-full bg-rose-600/90 text-white hover:bg-rose-700 transition shadow-lg active:scale-90 flex items-center justify-center"
-                        title="حذف القصة"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveStoryGroup(null);
-                        setActiveStoryIndex(0);
-                        setShowViewers(false);
-                      }}
-                      className="p-2 rounded-full bg-black/40 text-white hover:bg-black/70 transition active:scale-90"
-                      title="إغلاق"
-                    >
-                      <X className="h-5 w-5" />
-                    </button>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={(e) => { e.stopPropagation(); handleShareStory(currentStory); }} className="p-2 rounded-full bg-black/40 text-white"><Share2 className="h-4 w-4" /></button>
+                  {isMyStory && <button onClick={(e) => { e.stopPropagation(); handleDeleteCurrentStory(currentStory); }} className="p-2.5 rounded-full bg-rose-600/90 text-white"><Trash2 className="h-4 w-4" /></button>}
+                  <button onClick={() => { setActiveStoryGroup(null); setShowViewers(false); }} className="p-2 rounded-full bg-black/40 text-white"><X className="h-5 w-5" /></button>
                 </div>
               </div>
-
-              <div
-                className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden"
-                onContextMenu={(e) => e.preventDefault()}
-              >
-                {isVideo? (
-                  <video
-                    src={mediaUrl}
-                    autoPlay
-                    playsInline
-                    onTimeUpdate={(e) => {
-                      const p =
-                        (e.currentTarget.currentTime / e.currentTarget.duration) * 100;
-                      setStoryProgress(p || 0);
-                    }}
-                    onEnded={handleNextStory}
-                    className="w-full h-full object-cover"
-                  />
-                ) : mediaUrl? (
-                  <img
-                    src={mediaUrl}
-                    alt="قصة"
-                    onDragStart={(e) => e.preventDefault()}
-                    className="w-full h-full object-cover select-none"
-                  />
-                ) : (
-                  <p className="text-sm text-slate-400">الوسائط غير متوفرة</p>
-                )}
-
-                <div className="absolute inset-0 flex z-20">
-                  <div
-                    className="w-[35%] h-full cursor-pointer"
-                    onClick={handlePrevStory}
-                  />
-                  <div
-                    className="w-[65%] h-full cursor-pointer"
-                    onClick={handleNextStory}
-                  />
-                </div>
-
-                {isMyStory && (
-                  <button
-                    type="button"
-                    onClick={() => setShowViewers((v) =>!v)}
-                    className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-full bg-black/60 backdrop-blur px-5 py-2.5 text-white text-xs font-bold shadow-lg border border-white/10"
-                  >
-                    <Eye className="h-4 w-4" />
-                    {viewers.length} مشاهدة
-                  </button>
-                )}
-              </div>
-
-              {showViewers && isMyStory && (
-                <div className="absolute bottom-0 inset-x-0 z-50 max-h-[55%] bg-zinc-900 rounded-t- p-4 animate-in slide-in-from-bottom duration-300 overflow-y-auto no-scrollbar">
-                  <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" />
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-bold text-white">المشاهدون {viewers.length}</h3>
-                    <button onClick={() => setShowViewers(false)} className="p-1 rounded-full bg-white/10">
-                      <X className="h-4 w-4 text-white/70" />
-                    </button>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    {viewers.length === 0? (
-                      <p className="text-xs text-white/50 text-center py-10">لا يوجد مشاهدين بعد.. أول ما احد يشوف قصتك راح يظهر هنا</p>
-                    ) : (
-                      viewers.map((v: any) => (
-                        <div key={v.profiles.id + v.created_at} className="flex items-center justify-between">
-                          <Link to={`/profile/${v.profiles.id}`} className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full overflow-hidden bg-zinc-800">
-                              {v.profiles.avatar_url? (
-                                <img src={v.profiles.avatar_url} alt={v.profiles.full_name} className="h-full w-full object-cover" />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center">
-                                  <User className="h-5 w-5 text-white/60" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex flex-col text-right">
-                              <span className="text-sm font-medium text-white">{v.profiles.full_name}</span>
-                              <span className="text- text-white/50">{getTimeAgo(v.created_at)}</span>
-                            </div>
-                          </Link>
-                          <span className="text- text-white/30">{getTimeAgo(v.created_at)}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
-          );
-        })()}
-    </PhoneShell>
-  );
-}
+            <div className="relative w-full h-full flex items-center justify-center bg-black">
+              {isVideo? <video src={mediaUrl} autoPlay playsInline onTimeUpdate={(e) => setStoryProgress((e.currentTarget.currentTime / e.currentTarget.duration) * 100 || 0)} onEnded={handleNextStory} className="w-full h-full object-cover" /> : mediaUrl? <img src={mediaUrl} alt="قصة" className="w-full h-full object-cover" /> : <p className="text-sm text-slate-400">الوسائط غير متوفرة</p>}
+              <div className="absolute inset-0 flex z-20"><div className="w-[35%] h-full" onClick={handlePrevStory} /><div className="w-[65%] h-full" onClick={handleNextStory} /></div>
+              {isMyStory && <button onClick={() => setShowViewers(v =>!v)} className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-full bg-black/60 backdrop-blur px-5 py-2.5 text-white text-xs font-bold border border-white/10"><Eye className="h-4 w-4" />{viewers.length} مشاهدة</button>}
