@@ -34,15 +34,15 @@ function SplashScreen() {
         />
         <div className="absolute inset-0 bg-gradient-hero" />
 
-        {/* هيدر موحّد يستخدم شعار جوك نفسه مع زر الوضع */}
-        <header className="relative flex items-center justify-between px-6 py-5">
-          <Logo size="h-12" />
+        {/* هيدر يحتوي على زر الثيم فقط لتفادي التكرار */}
+        <header className="relative flex items-center justify-end px-6 py-5">
           <ThemeToggle />
         </header>
 
-        <main className="relative flex flex-1 flex-col items-center justify-center gap-5 px-8 pb-8 text-center">
-          <Logo size="h-24" className="scale-110" />
-          <p className="text-sm font-semibold text-muted-foreground">جمع ربعك وعيش جوك</p>
+        {/* الشعار الموحد في المنتصف وتحته الجملة المعتمدة مباشرة */}
+        <main className="relative flex flex-1 flex-col items-center justify-center gap-2 px-8 pb-8 text-center">
+          <Logo size="h-20" />
+          <p className="text-base font-bold text-foreground drop-shadow-sm">جمع ربعك وعيش جوك</p>
         </main>
 
         <div className="relative flex flex-col items-center gap-5 px-10 pb-12">
@@ -61,4 +61,3 @@ function SplashScreen() {
     </PhoneShell>
   );
 }
-
