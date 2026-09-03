@@ -119,12 +119,12 @@ export async function markNotificationRead(notificationId) {
   if (error) throw error;
 }
 
-export async function setPlayerPresence({ active, regionId = null, latitude = null, longitude = null, availableUntil = null }) {
+export async function setPlayerPresence({ active, regionId = null, latitude = null, longitude = null }) {
   const client = requireSupabase();
   const { data: sessionData } = await client.auth.getSession();
   const userId = sessionData.session?.user?.id;
   if (!userId) throw new Error("يجب تسجيل الدخول لتفعيل حالة النشاط.");
-  const { error } = await client.from("player_presence").upsert({ user_id: userId, active, region_id: regionId, latitude, longitude, available_until: availableUntil, updated_at: new Date().toISOString(), }, { onConflict: "user_id" },);
+  const { error } = await client.from("player_presence").upsert({ user_id: userId, active, region_id: regionId, latitude, longitude, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
   if (error) throw error;
   const { error: profileError } = await client.from("profiles").update({ allow_jawk_requests: active, is_available: active, is_online: active, last_seen_at: new Date().toISOString() }).eq("id", userId);
   if (profileError) throw profileError;
@@ -133,7 +133,7 @@ export async function setPlayerPresence({ active, regionId = null, latitude = nu
 export async function findPlayersWithJamJam({ matchId, maxDistanceKm = 10, limit = 5 }) {
   if (!matchId) throw new Error("لا توجد مباراة ناقصة للبحث عن لاعبين.");
   const client = requireSupabase();
-  const { data, error } = await client.rpc("jamjam_matchmaker", { p_match_id: matchId, p_max_distance_km: maxDistanceKm, p_limit: limit, });
+  const { data, error } = await client.rpc("jamjam_matchmaker", { p_match_id: matchId, p_max_distance_km: maxDistanceKm, p_limit: limit });
   if (error) throw error;
   return data ?? [];
 }
@@ -148,9 +148,9 @@ export async function fetchFazaaData() {
   const firstError = [requestsResult, playersResult, campaignResult].find((item) => item.error)?.error;
   if (firstError) throw firstError;
   return {
-    fazaaRequests: (requestsResult.data ?? []).map((request) => ({ ...request, pitch: request.match?.venue?.name ?? "ملعب غير مسمى", startsIn: formatRelativeTime(request.starts_at), })),
-    players: (playersResult.data ?? []).map((player) => ({ ...player, name: player.display_name ?? "لاعب", online: Boolean(player.is_online), distance: toArabicDistance(player.distance_meters), })),
-    campaign: campaignResult.data ? { ...campaignResult.data, progress: campaignResult.data.goal_amount ? Math.min(100, Math.round((campaignResult.data.raised_amount / campaignResult.data.goal_amount) * 100,)) : 0, raised: `${Number(campaignResult.data.raised_amount ?? 0).toLocaleString("ar-IQ")} د.ع`, goal: `${Number(campaignResult.data.goal_amount ?? 0).toLocaleString("ar-IQ")} د.ع`, } : null,
+    fazaaRequests: (requestsResult.data ?? []).map((request) => ({ ...request, pitch: request.match?.venue?.name ?? "ملعب غير مسمى", startsIn: formatRelativeTime(request.starts_at) })),
+    players: (playersResult.data ?? []).map((player) => ({ ...player, name: player.display_name ?? "لاعب", online: Boolean(player.is_online), distance: toArabicDistance(player.distance_meters) })),
+    campaign: campaignResult.data ? { ...campaignResult.data, progress: campaignResult.data.goal_amount ? Math.min(100, Math.round((campaignResult.data.raised_amount / campaignResult.data.goal_amount) * 100)) : 0, raised: `${Number(campaignResult.data.raised_amount ?? 0).toLocaleString("ar-IQ")} د.ع`, goal: `${Number(campaignResult.data.goal_amount ?? 0).toLocaleString("ar-IQ")} د.ع` } : null,
   };
 }
 
@@ -165,14 +165,14 @@ export async function fetchProfile(userId) {
   const firstError = [profileResult, statsResult, badgesResult, gamesResult].find((item) => item.error)?.error;
   if (firstError) throw firstError;
   const profile = profileResult.data;
-  return profile ? { ...profile, name: profile.display_name ?? "لاعب جوك", role: roles.find((role) => role.id === profile.role)?.label ?? profile.role ?? "لاعب", status: profile.status === "radar" ? "رادار نشط" : "متاح للعب", presenceActive: Boolean(profile.allow_jawk_requests && profile.is_available), stats: [{ id: "games", label: "لعبات", value: String(statsResult.data?.games ?? 0) }, { id: "wins", label: "فوز", value: String(statsResult.data?.wins ?? 0) }, { id: "goals", label: "هدف", value: String(statsResult.data?.goals ?? 0) },], badges: badgesResult.data ?? [], recentGames: gamesResult.data ?? [], } : null;
+  return profile ? { ...profile, name: profile.display_name ?? "لاعب جوك", role: roles.find((role) => role.id === profile.role)?.label ?? profile.role ?? "لاعب", status: profile.status === "radar" ? "رادار نشط" : "متاح للعب", presenceActive: Boolean(profile.allow_jawk_requests && profile.is_available), stats: [{ id: "games", label: "لعبات", value: String(statsResult.data?.games ?? 0) }, { id: "wins", label: "فوز", value: String(statsResult.data?.wins ?? 0) }, { id: "goals", label: "هدف", value: String(statsResult.data?.goals ?? 0) }], badges: badgesResult.data ?? [], recentGames: gamesResult.data ?? [] } : null;
 }
 
 export async function fetchRatings(matchId) {
   const client = requireSupabase();
   const { data, error } = await client.from("match_ratings").select("id,value,player:profiles(id,display_name,avatar_url)").eq("match_id", matchId).order("created_at", { ascending: false });
   if (error) throw error;
-  return (data ?? []).map((rating) => ({ id: rating.id, name: rating.player?.display_name ?? "لاعب", value: Number(rating.value ?? 0), playerId: rating.player?.id, }));
+  return (data ?? []).map((rating) => ({ id: rating.id, name: rating.player?.display_name ?? "لاعب", value: Number(rating.value ?? 0), playerId: rating.player?.id }));
 }
 
 export async function uploadChatAttachment(file) {
@@ -183,14 +183,12 @@ export async function uploadChatAttachment(file) {
   if (!userId) throw new Error("يجب تسجيل الدخول لإرفاق ملف.");
   const extension = file.name.split(".").pop()?.toLowerCase() || "bin";
   const path = `${userId}/${crypto.randomUUID()}.${extension}`;
-  const { error: uploadError } = await client.storage.from("chat-attachments").upload(path, file, { upsert: false, contentType: file.type || undefined, });
+  const { error: uploadError } = await client.storage.from("chat-attachments").upload(path, file, { upsert: false, contentType: file.type || undefined });
   if (uploadError) throw uploadError;
   const { data, error } = await client.storage.from("chat-attachments").createSignedUrl(path, 3600);
   if (error) throw error;
   return { url: data.signedUrl, name: file.name, type: file.type || "application/octet-stream" };
 }
-
-// ============ تم التعديل - هاي الدالتين الي كانت بيها المشكلة ============
 
 export async function fetchMessages(matchId) {
   const client = requireSupabase();
@@ -250,7 +248,7 @@ export async function joinMatch(matchId) {
   const { data: sessionData } = await client.auth.getSession();
   const userId = sessionData.session?.user?.id;
   if (!userId) throw new Error("يجب تسجيل الدخول للانضمام إلى المباراة.");
-  const { error } = await client.from("match_participants").upsert({ match_id: matchId, user_id: userId, status: "confirmed" }, { onConflict: "match_id,user_id" },);
+  const { error } = await client.from("match_participants").upsert({ match_id: matchId, user_id: userId, status: "confirmed" }, { onConflict: "match_id,user_id" });
   if (error) throw error;
 }
 
@@ -259,7 +257,7 @@ export async function respondToFazaa(requestId) {
   const { data: sessionData } = await client.auth.getSession();
   const userId = sessionData.session?.user?.id;
   if (!userId) throw new Error("يجب تسجيل الدخول لإرسال الفزعة.");
-  const { error } = await client.from("fazaa_responses").upsert({ request_id: requestId, user_id: userId, status: "accepted" }, { onConflict: "request_id,user_id" },);
+  const { error } = await client.from("fazaa_responses").upsert({ request_id: requestId, user_id: userId, status: "accepted" }, { onConflict: "request_id,user_id" });
   if (error) throw error;
 }
 
@@ -270,7 +268,7 @@ export async function invitePlayer({ matchId, playerId }) {
   const userId = sessionData.session?.user?.id;
   if (!userId) throw new Error("يجب تسجيل الدخول لإرسال دعوة.");
   const realMatchId = matchId === "general" ? GENERAL_MATCH_ID : matchId;
-  const { error } = await client.from("match_invitations").upsert({ match_id: realMatchId, inviter_id: userId, invitee_id: playerId, status: "pending" }, { onConflict: "match_id,invitee_id" },);
+  const { error } = await client.from("match_invitations").upsert({ match_id: realMatchId, inviter_id: userId, invitee_id: playerId, status: "pending" }, { onConflict: "match_id,invitee_id" });
   if (error) throw error;
 }
 
@@ -288,7 +286,7 @@ export async function saveRating({ matchId, playerId, value }) {
   const { data: sessionData } = await client.auth.getSession();
   const userId = sessionData.session?.user?.id;
   if (!userId) throw new Error("يجب تسجيل الدخول لحفظ التقييم.");
-  const { error } = await client.from("match_ratings").upsert({ match_id: matchId, rater_id: userId, player_id: playerId, value }, { onConflict: "match_id,rater_id,player_id" },);
+  const { error } = await client.from("match_ratings").upsert({ match_id: matchId, rater_id: userId, player_id: playerId, value }, { onConflict: "match_id,rater_id,player_id" });
   if (error) throw error;
 }
 
